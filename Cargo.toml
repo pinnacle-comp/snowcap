@@ -1,0 +1,17 @@
+[package]
+name = "snowcap"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+smithay-client-toolkit = "0.17.0"
+anyhow = { version = "1.0.75", features = ["backtrace"]}
+iced = { version = "0.10.0", features = ["wgpu", "tokio"] }
+iced_wgpu = "0.11.1"
+iced_runtime = "0.1.1"
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"]}
+raw-window-handle = "0.5.2"
+tokio = { version = "1.32.0", features = ["full"] }
+futures = "0.3.28"
+smithay-clipboard = "0.6.6"
