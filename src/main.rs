@@ -24,7 +24,7 @@ use smithay_client_toolkit::{
     reexports::client::{
         globals::registry_queue_init,
         protocol::{
-            wl_keyboard::WlKeyboard,
+            wl_keyboard::{self, WlKeyboard},
             wl_output::WlOutput,
             wl_pointer::{self, AxisSource, WlPointer},
             wl_seat::WlSeat,
@@ -82,6 +82,7 @@ struct State {
 
     clipboard: WaylandClipboard,
 
+    keyboard: Option<wl_keyboard::WlKeyboard>,
     keyboard_focus: bool,
     keyboard_modifiers: Modifiers,
 
@@ -152,14 +153,7 @@ fn main() -> anyhow::Result<()> {
             .context("failed to create wgpu surface")?
     };
 
-    let adapter =
-        futures::executor::block_on(wgpu_instance.request_adapter(&wgpu::RequestAdapterOptions {
-            compatible_surface: Some(&wgpu_surface),
-            ..Default::default()
-        }))
-        .context("failed to find suitable adapter")?;
-
-    let (format, (device, queue)) = futures::executor::block_on(async {
+    let (format, (device, queue), adapter) = futures::executor::block_on(async {
         let adapter = wgpu::util::initialize_adapter_from_env_or_default(
             &wgpu_instance,
             Backends::GL | Backends::VULKAN,
@@ -193,6 +187,7 @@ fn main() -> anyhow::Result<()> {
                 )
                 .await
                 .expect("Request device"),
+            adapter,
         )
     });
 
@@ -210,7 +205,7 @@ fn main() -> anyhow::Result<()> {
     let mut renderer: Renderer<iced_wgpu::Backend, Theme> = Renderer::new(backend);
 
     let prog = iced_runtime::program::State::new(
-        Prog,
+        Prog::default(),
         Size::new(width as f32, height as f32),
         &mut renderer,
         &mut Debug::new(),
@@ -220,22 +215,30 @@ fn main() -> anyhow::Result<()> {
         registry_state: RegistryState::new(&globals),
         seat_state: SeatState::new(&globals, &queue_handle),
         output_state: OutputState::new(&globals, &queue_handle),
+
         layer,
         width,
         height,
         viewport: Viewport::with_physical_size(Size::new(width, height), 1.0),
+
         exit: false,
+
         adapter,
         device,
         queue,
         surface: wgpu_surface,
         renderer,
+
         program: prog,
         clipboard: unsafe { WaylandClipboard::new(conn.backend().display_ptr() as *mut _) },
+
+        keyboard: None,
         keyboard_focus: false,
         keyboard_modifiers: Modifiers::default(),
+
         pointer: None,
         pointer_location: (0.0, 0.0),
+
         initial_configure_sent: false,
     };
 
@@ -336,16 +339,20 @@ impl SeatHandler for State {
         &mut self.seat_state
     }
 
-    fn new_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: WlSeat) {}
+    fn new_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {}
 
     fn new_capability(
         &mut self,
-        conn: &Connection,
+        _conn: &Connection,
         qh: &QueueHandle<Self>,
         seat: WlSeat,
         capability: Capability,
     ) {
-        if capability == Capability::Pointer {
+        if capability == Capability::Keyboard && self.keyboard.is_none() {
+            let keyboard = self.seat_state.get_keyboard(qh, &seat, None).unwrap();
+            self.keyboard = Some(keyboard);
+        }
+        if capability == Capability::Pointer && self.pointer.is_none() {
             let pointer = self.seat_state.get_pointer(qh, &seat).unwrap();
             self.pointer = Some(pointer);
         }
@@ -353,14 +360,24 @@ impl SeatHandler for State {
 
     fn remove_capability(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        seat: WlSeat,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _seat: WlSeat,
         capability: Capability,
     ) {
+        if capability == Capability::Keyboard {
+            if let Some(keyboard) = self.keyboard.take() {
+                keyboard.release();
+            }
+        }
+        if capability == Capability::Pointer {
+            if let Some(pointer) = self.pointer.take() {
+                pointer.release();
+            }
+        }
     }
 
-    fn remove_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: WlSeat) {}
+    fn remove_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {}
 }
 
 impl KeyboardHandler for State {
