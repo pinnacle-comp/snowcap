@@ -1,9 +1,11 @@
 mod clipboard;
+mod keyboard;
+mod pointer;
 mod program;
 
 use anyhow::Context;
 use clipboard::WaylandClipboard;
-use iced::{Color, Size, Theme};
+use iced::{mouse::ScrollDelta, Color, Size, Theme};
 use iced_runtime::Debug;
 use iced_wgpu::{
     graphics::{Renderer, Viewport},
@@ -16,16 +18,27 @@ use raw_window_handle::{
 };
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_seat,
+    delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
+    delegate_registry, delegate_seat,
     output::{OutputHandler, OutputState},
     reexports::client::{
         globals::registry_queue_init,
-        protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface},
+        protocol::{
+            wl_keyboard::WlKeyboard,
+            wl_output::WlOutput,
+            wl_pointer::{self, AxisSource, WlPointer},
+            wl_seat::WlSeat,
+            wl_surface::WlSurface,
+        },
         Connection, Proxy, QueueHandle,
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
-    seat::{Capability, SeatHandler, SeatState},
+    seat::{
+        keyboard::{KeyEvent, KeyboardHandler, Modifiers},
+        pointer::{PointerEvent, PointerEventKind, PointerHandler},
+        Capability, SeatHandler, SeatState,
+    },
     shell::{
         wlr_layer::{self, Anchor, LayerShell, LayerShellHandler, LayerSurface},
         WaylandSurface,
@@ -68,6 +81,14 @@ struct State {
     program: iced_runtime::program::State<Prog>,
 
     clipboard: WaylandClipboard,
+
+    keyboard_focus: bool,
+    keyboard_modifiers: Modifiers,
+
+    pointer: Option<wl_pointer::WlPointer>,
+    pointer_location: (f64, f64),
+
+    initial_configure_sent: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -211,10 +232,18 @@ fn main() -> anyhow::Result<()> {
         renderer,
         program: prog,
         clipboard: unsafe { WaylandClipboard::new(conn.backend().display_ptr() as *mut _) },
+        keyboard_focus: false,
+        keyboard_modifiers: Modifiers::default(),
+        pointer: None,
+        pointer_location: (0.0, 0.0),
+        initial_configure_sent: false,
     };
 
     loop {
+        // tracing::debug!("TOP OF LOOP");
         event_queue.blocking_dispatch(&mut state).unwrap();
+
+        state.update_widgets();
 
         if state.exit {
             break;
@@ -238,7 +267,8 @@ impl CompositorHandler for State {
     }
 
     fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, time: u32) {
-        self.draw();
+        self.update_widgets();
+        self.draw(qh);
     }
 }
 
@@ -292,19 +322,12 @@ impl LayerShellHandler for State {
 
         self.surface.configure(&self.device, &surface_config);
 
-        let _ = self.program.update(
-            self.viewport.logical_size(),
-            iced::mouse::Cursor::Unavailable,
-            &mut self.renderer,
-            &Theme::Dark,
-            &iced_wgpu::core::renderer::Style {
-                text_color: Color::WHITE,
-            },
-            &mut self.clipboard,
-            &mut Debug::new(),
-        );
+        self.update_widgets();
 
-        self.draw();
+        if !self.initial_configure_sent {
+            self.initial_configure_sent = true;
+            self.draw(qh);
+        }
     }
 }
 
@@ -322,6 +345,10 @@ impl SeatHandler for State {
         seat: WlSeat,
         capability: Capability,
     ) {
+        if capability == Capability::Pointer {
+            let pointer = self.seat_state.get_pointer(qh, &seat).unwrap();
+            self.pointer = Some(pointer);
+        }
     }
 
     fn remove_capability(
@@ -336,11 +363,230 @@ impl SeatHandler for State {
     fn remove_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: WlSeat) {}
 }
 
+impl KeyboardHandler for State {
+    fn enter(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &WlKeyboard,
+        surface: &WlSurface,
+        _serial: u32,
+        _raw: &[u32],
+        _keysyms: &[u32],
+    ) {
+        if self.layer.wl_surface() != surface {
+            return;
+        }
+
+        self.keyboard_focus = true;
+    }
+
+    fn leave(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &WlKeyboard,
+        surface: &WlSurface,
+        _serial: u32,
+    ) {
+        if self.layer.wl_surface() != surface {
+            return;
+        }
+
+        self.keyboard_focus = false;
+    }
+
+    fn press_key(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &WlKeyboard,
+        _serial: u32,
+        event: KeyEvent,
+    ) {
+        tracing::debug!("start of press_key");
+        if !self.keyboard_focus {
+            return;
+        }
+
+        let Some(keycode) = crate::keyboard::raw_key_to_keycode(event.raw_code) else {
+            return;
+        };
+
+        let mut modifiers = iced_runtime::keyboard::Modifiers::default();
+
+        let Modifiers {
+            ctrl,
+            alt,
+            shift,
+            caps_lock: _,
+            logo,
+            num_lock: _,
+        } = &self.keyboard_modifiers;
+
+        if *ctrl {
+            modifiers |= iced_runtime::keyboard::Modifiers::CTRL;
+        }
+        if *alt {
+            modifiers |= iced_runtime::keyboard::Modifiers::ALT;
+        }
+        if *shift {
+            modifiers |= iced_runtime::keyboard::Modifiers::SHIFT;
+        }
+        if *logo {
+            modifiers |= iced_runtime::keyboard::Modifiers::LOGO;
+        }
+
+        let event = iced::Event::Keyboard(iced_runtime::keyboard::Event::KeyPressed {
+            key_code: keycode,
+            modifiers,
+        });
+
+        self.program.queue_event(event);
+    }
+
+    fn release_key(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &WlKeyboard,
+        _serial: u32,
+        event: KeyEvent,
+    ) {
+        if !self.keyboard_focus {
+            return;
+        }
+
+        let Some(keycode) = crate::keyboard::raw_key_to_keycode(event.raw_code) else {
+            return;
+        };
+
+        let mut modifiers = iced_runtime::keyboard::Modifiers::default();
+
+        let Modifiers {
+            ctrl,
+            alt,
+            shift,
+            caps_lock: _,
+            logo,
+            num_lock: _,
+        } = &self.keyboard_modifiers;
+
+        if *ctrl {
+            modifiers |= iced_runtime::keyboard::Modifiers::CTRL;
+        }
+        if *alt {
+            modifiers |= iced_runtime::keyboard::Modifiers::ALT;
+        }
+        if *shift {
+            modifiers |= iced_runtime::keyboard::Modifiers::SHIFT;
+        }
+        if *logo {
+            modifiers |= iced_runtime::keyboard::Modifiers::LOGO;
+        }
+
+        let event = iced::Event::Keyboard(iced_runtime::keyboard::Event::KeyReleased {
+            key_code: keycode,
+            modifiers,
+        });
+
+        self.program.queue_event(event);
+    }
+
+    fn update_modifiers(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &WlKeyboard,
+        _serial: u32,
+        modifiers: Modifiers,
+    ) {
+        self.keyboard_modifiers = modifiers;
+    }
+}
+
+impl PointerHandler for State {
+    fn pointer_frame(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _pointer: &WlPointer,
+        events: &[PointerEvent],
+    ) {
+        for event in events {
+            if &event.surface != self.layer.wl_surface() {
+                continue;
+            }
+
+            let iced_event = match event.kind {
+                PointerEventKind::Enter { .. } => {
+                    iced::Event::Mouse(iced::mouse::Event::CursorEntered)
+                }
+                PointerEventKind::Leave { .. } => {
+                    iced::Event::Mouse(iced::mouse::Event::CursorLeft)
+                }
+                PointerEventKind::Motion { .. } => {
+                    self.pointer_location = event.position;
+                    iced::Event::Mouse(iced::mouse::Event::CursorMoved {
+                        position: iced::Point {
+                            x: event.position.0 as f32,
+                            y: event.position.1 as f32,
+                        },
+                    })
+                }
+                PointerEventKind::Press { button, .. } => {
+                    if let Some(button) = crate::pointer::button_to_iced_button(button) {
+                        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(button))
+                    } else {
+                        continue;
+                    }
+                }
+                PointerEventKind::Release { button, .. } => {
+                    if let Some(button) = crate::pointer::button_to_iced_button(button) {
+                        iced::Event::Mouse(iced::mouse::Event::ButtonReleased(button))
+                    } else {
+                        continue;
+                    }
+                }
+                PointerEventKind::Axis {
+                    horizontal,
+                    vertical,
+                    source,
+                    time: _,
+                } => {
+                    let delta = match source.unwrap() {
+                        AxisSource::Wheel => ScrollDelta::Lines {
+                            x: horizontal.discrete as f32,
+                            y: vertical.discrete as f32,
+                        },
+                        AxisSource::Finger => ScrollDelta::Pixels {
+                            x: horizontal.absolute as f32,
+                            y: vertical.absolute as f32,
+                        },
+                        AxisSource::Continuous => ScrollDelta::Pixels {
+                            x: horizontal.absolute as f32,
+                            y: vertical.absolute as f32,
+                        },
+                        AxisSource::WheelTilt => ScrollDelta::Lines {
+                            x: horizontal.discrete as f32,
+                            y: vertical.discrete as f32,
+                        },
+                        _ => continue,
+                    };
+                    iced::Event::Mouse(iced::mouse::Event::WheelScrolled { delta })
+                }
+            };
+
+            self.program.queue_event(iced_event);
+        }
+    }
+}
+
 delegate_compositor!(State);
 delegate_output!(State);
 delegate_seat!(State);
-// delegate_keyboard!(State);
-// delegate_pointer!(State);
+delegate_keyboard!(State);
+delegate_pointer!(State);
 delegate_layer!(State);
 delegate_registry!(State);
 
@@ -353,8 +599,8 @@ impl ProvidesRegistryState for State {
 }
 
 impl State {
-    pub fn draw(&mut self) {
-        tracing::debug!("DRAWING");
+    pub fn draw(&mut self, queue_handle: &QueueHandle<Self>) {
+        // tracing::debug!("DRAWING");
         match self.surface.get_current_texture() {
             Ok(frame) => {
                 let mut encoder = self
@@ -382,8 +628,35 @@ impl State {
 
                 self.queue.submit(Some(encoder.finish()));
                 frame.present();
+
+                self.layer
+                    .wl_surface()
+                    .damage_buffer(0, 0, self.width as i32, self.height as i32);
+
+                self.layer
+                    .wl_surface()
+                    .frame(queue_handle, self.layer.wl_surface().clone());
+
+                self.layer.commit();
             }
             Err(_) => todo!(),
         }
+    }
+
+    pub fn update_widgets(&mut self) {
+        let _ = self.program.update(
+            self.viewport.logical_size(),
+            iced::mouse::Cursor::Available(iced::Point {
+                x: self.pointer_location.0 as f32,
+                y: self.pointer_location.1 as f32,
+            }),
+            &mut self.renderer,
+            &Theme::Dark,
+            &iced_wgpu::core::renderer::Style {
+                text_color: Color::WHITE,
+            },
+            &mut self.clipboard,
+            &mut Debug::new(),
+        );
     }
 }
