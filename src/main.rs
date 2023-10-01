@@ -1,7 +1,6 @@
 mod clipboard;
 mod keyboard;
 mod pointer;
-mod program;
 mod widget;
 
 use std::{
@@ -282,7 +281,7 @@ fn main() -> anyhow::Result<()> {
         ..Default::default()
     });
 
-    let adapter = futures::executor::block_on(async {
+    let adapter = Arc::new(futures::executor::block_on(async {
         wgpu::util::initialize_adapter_from_env_or_default(
             &instance,
             Backends::GL | Backends::VULKAN,
@@ -290,9 +289,7 @@ fn main() -> anyhow::Result<()> {
         )
         .await
         .unwrap()
-    });
-
-    let adapter = Arc::new(adapter);
+    }));
 
     let adapter_features = adapter.features();
     let needed_limits = wgpu::Limits::default();
@@ -398,11 +395,11 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     loop {
-        event_loop1.dispatch(Duration::from_millis(6), &mut state1)?;
-        event_loop2.dispatch(Duration::from_millis(6), &mut state2)?;
-        event_loop3.dispatch(Duration::from_millis(6), &mut state3)?;
-        event_loop4.dispatch(Duration::from_millis(6), &mut state4)?;
-        event_loop5.dispatch(Duration::from_millis(6), &mut state5)?;
+        event_loop1.dispatch(Duration::ZERO, &mut state1)?;
+        event_loop2.dispatch(Duration::ZERO, &mut state2)?;
+        event_loop3.dispatch(Duration::ZERO, &mut state3)?;
+        event_loop4.dispatch(Duration::ZERO, &mut state4)?;
+        event_loop5.dispatch(Duration::ZERO, &mut state5)?;
 
         if state1.exit || state2.exit {
             break;
