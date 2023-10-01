@@ -2,16 +2,21 @@ mod clipboard;
 mod keyboard;
 mod pointer;
 mod program;
+mod widget;
+
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use anyhow::Context;
 use clipboard::WaylandClipboard;
-use iced::{mouse::ScrollDelta, Color, Size, Theme};
+use iced::{mouse::ScrollDelta, widget::slider, Color, Length, Size, Theme};
 use iced_runtime::Debug;
 use iced_wgpu::{
     graphics::{Renderer, Viewport},
-    wgpu::{self, Backends},
+    wgpu::{self, Adapter, Backends, Instance, SurfaceCapabilities},
 };
-use program::Prog;
 use raw_window_handle::{
     HasRawDisplayHandle, HasRawWindowHandle, RawDisplayHandle, RawWindowHandle,
     WaylandDisplayHandle, WaylandWindowHandle,
@@ -21,16 +26,19 @@ use smithay_client_toolkit::{
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
     delegate_registry, delegate_seat,
     output::{OutputHandler, OutputState},
-    reexports::client::{
-        globals::registry_queue_init,
-        protocol::{
-            wl_keyboard::{self, WlKeyboard},
-            wl_output::WlOutput,
-            wl_pointer::{self, AxisSource, WlPointer},
-            wl_seat::WlSeat,
-            wl_surface::WlSurface,
+    reexports::{
+        calloop::{EventLoop, LoopHandle, LoopSignal},
+        client::{
+            globals::registry_queue_init,
+            protocol::{
+                wl_keyboard::{self, WlKeyboard},
+                wl_output::WlOutput,
+                wl_pointer::{self, AxisSource, WlPointer},
+                wl_seat::WlSeat,
+                wl_surface::WlSurface,
+            },
+            Connection, Proxy, QueueHandle, WaylandSource,
         },
-        Connection, Proxy, QueueHandle,
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
@@ -44,7 +52,9 @@ use smithay_client_toolkit::{
         WaylandSurface,
     },
 };
+use tracing::{debug, trace};
 use tracing_subscriber::EnvFilter;
+use widget::{SnowcapMessage, SnowcapWidget, SnowcapWidgetProgram, WidgetFn};
 
 struct RawWaylandHandle(RawDisplayHandle, RawWindowHandle);
 
@@ -64,21 +74,25 @@ struct State {
     registry_state: RegistryState,
     seat_state: SeatState,
     output_state: OutputState,
+    compositor_state: CompositorState,
+    layer_shell: LayerShell,
 
+    widget: iced_runtime::program::State<SnowcapWidgetProgram>,
     layer: LayerSurface,
     width: u32,
     height: u32,
     viewport: Viewport,
 
     exit: bool,
+    loop_handle: LoopHandle<'static, Self>,
+    loop_signal: LoopSignal,
 
-    adapter: wgpu::Adapter,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+    adapter: Arc<wgpu::Adapter>,
+    device: Arc<wgpu::Device>,
+    queue: Arc<wgpu::Queue>,
     surface: wgpu::Surface,
-    renderer: iced_wgpu::Renderer<Theme>,
-
-    program: iced_runtime::program::State<Prog>,
+    renderer: Arc<Mutex<iced_wgpu::Renderer<Theme>>>,
+    capabilities: Arc<SurfaceCapabilities>,
 
     clipboard: WaylandClipboard,
 
@@ -92,6 +106,166 @@ struct State {
     initial_configure_sent: bool,
 }
 
+impl State {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        (width, height): (u32, u32),
+        anchor: Anchor,
+        widgets: WidgetFn,
+        conn: &Connection,
+        instance: &wgpu::Instance,
+        adapter: Arc<wgpu::Adapter>,
+        device: Arc<wgpu::Device>,
+        queue: Arc<wgpu::Queue>,
+        renderer: Option<Arc<Mutex<Renderer<iced_wgpu::Backend, Theme>>>>,
+        capabilities: Option<Arc<SurfaceCapabilities>>,
+    ) -> anyhow::Result<(
+        Self,
+        EventLoop<'static, Self>,
+        Arc<Mutex<Renderer<iced_wgpu::Backend, Theme>>>,
+    )> {
+        debug!("top of State::new");
+        debug!("init registry");
+        let (globals, event_queue) =
+            registry_queue_init::<State>(conn).context("failed to init registry queue")?;
+
+        let queue_handle = event_queue.handle();
+
+        debug!("create loop");
+        let event_loop = EventLoop::<State>::try_new()?;
+        let loop_handle = event_loop.handle();
+        debug!("create wayland source");
+        WaylandSource::new(event_queue)?
+            .insert(loop_handle.clone())
+            .expect("failed to insert wayland source into event loop");
+
+        debug!("bind globals");
+        let compositor = CompositorState::bind(&globals, &queue_handle)
+            .context("wl_compositor not availible")?;
+        let layer_shell =
+            LayerShell::bind(&globals, &queue_handle).context("layer shell not availible")?;
+
+        debug!("create layer surface");
+        let surface = compositor.create_surface(&queue_handle);
+        let layer = layer_shell.create_layer_surface(
+            &queue_handle,
+            surface,
+            wlr_layer::Layer::Overlay,
+            Some("snowcap_layer"),
+            None,
+        );
+
+        layer.set_keyboard_interactivity(wlr_layer::KeyboardInteractivity::OnDemand);
+
+        layer.set_size(width, height);
+        layer.set_anchor(anchor);
+
+        layer.commit();
+
+        debug!("create wayland handle");
+        let wayland_handle = {
+            let mut handle = WaylandDisplayHandle::empty();
+            handle.display = conn.backend().display_ptr() as *mut _;
+            let display_handle = RawDisplayHandle::Wayland(handle);
+
+            let mut handle = WaylandWindowHandle::empty();
+            handle.surface = layer.wl_surface().id().as_ptr() as *mut _;
+            let window_handle = RawWindowHandle::Wayland(handle);
+
+            RawWaylandHandle(display_handle, window_handle)
+        };
+
+        debug!("create wgpu surface");
+        let wgpu_surface = unsafe { instance.create_surface(&wayland_handle).unwrap() };
+
+        let (renderer, capabilities) =
+            if let (Some(renderer), Some(capabilities)) = (renderer, capabilities) {
+                debug!("create iced state");
+                (renderer, capabilities)
+            } else {
+                debug!("get capabilities"); // PERF: SLOW
+                let capabilities = wgpu_surface.get_capabilities(&adapter);
+                debug!("get texture format");
+                let format = capabilities
+                    .formats
+                    .iter()
+                    .copied()
+                    .find(wgpu::TextureFormat::is_srgb)
+                    .or_else(|| capabilities.formats.first().copied())
+                    .expect("Get preferred format");
+
+                tracing::debug!("---------FORMAT IS {format:?}");
+
+                // TODO: speed up
+                debug!("create iced backend"); // PERF: SLOW
+                let backend = iced_wgpu::Backend::new(
+                    &device,
+                    &queue,
+                    iced_wgpu::Settings {
+                        present_mode: wgpu::PresentMode::Mailbox,
+                        internal_backend: Backends::GL | Backends::VULKAN,
+                        ..Default::default()
+                    },
+                    format,
+                );
+
+                debug!("create iced renderer");
+                let renderer: Renderer<iced_wgpu::Backend, Theme> = Renderer::new(backend);
+                (Arc::new(Mutex::new(renderer)), Arc::new(capabilities))
+            };
+
+        let mut ren = renderer.lock().unwrap();
+
+        let state = iced_runtime::program::State::new(
+            SnowcapWidgetProgram { widgets },
+            Size::new(width as f32, height as f32),
+            &mut ren,
+            &mut Debug::new(),
+        );
+
+        debug!("create state");
+        let state = State {
+            registry_state: RegistryState::new(&globals),
+            seat_state: SeatState::new(&globals, &queue_handle),
+            output_state: OutputState::new(&globals, &queue_handle),
+            compositor_state: compositor,
+            layer_shell,
+
+            widget: state,
+            layer,
+            width,
+            height,
+            viewport: Viewport::with_physical_size(Size::new(width, height), 1.0),
+
+            adapter,
+            device,
+            queue,
+            renderer: renderer.clone(),
+            surface: wgpu_surface,
+            capabilities,
+
+            exit: false,
+            loop_handle,
+            loop_signal: event_loop.get_signal(),
+
+            clipboard: unsafe { WaylandClipboard::new(conn.backend().display_ptr() as *mut _) },
+
+            keyboard: None,
+            keyboard_focus: false,
+            keyboard_modifiers: Modifiers::default(),
+
+            pointer: None,
+            pointer_location: (0.0, 0.0),
+
+            initial_configure_sent: false,
+        };
+
+        drop(ren);
+
+        Ok((state, event_loop, renderer))
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new("debug"));
 
@@ -101,160 +275,142 @@ fn main() -> anyhow::Result<()> {
         .init();
 
     let conn = Connection::connect_to_env().context("failed to connect to wayland")?;
-    let (globals, mut event_queue) =
-        registry_queue_init::<State>(&conn).context("failed to init registry queue")?;
 
-    let queue_handle = event_queue.handle();
-
-    let compositor =
-        CompositorState::bind(&globals, &queue_handle).context("wl_compositor not availible")?;
-    let layer_shell =
-        LayerShell::bind(&globals, &queue_handle).context("layer shell not availible")?;
-
-    let surface = compositor.create_surface(&queue_handle);
-    let layer = layer_shell.create_layer_surface(
-        &queue_handle,
-        surface,
-        wlr_layer::Layer::Overlay,
-        Some("snowcap_layer"),
-        None,
-    );
-
-    layer.set_keyboard_interactivity(wlr_layer::KeyboardInteractivity::OnDemand);
-
-    let width = 256;
-    let height = 128;
-
-    layer.set_size(width, height);
-    layer.set_anchor(Anchor::TOP);
-
-    layer.commit();
-
-    let wgpu_instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+    debug!("creage wgpu instance");
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::GL | wgpu::Backends::VULKAN,
         ..Default::default()
     });
 
-    let handle = {
-        let mut handle = WaylandDisplayHandle::empty();
-        handle.display = conn.backend().display_ptr() as *mut _;
-        let display_handle = RawDisplayHandle::Wayland(handle);
-
-        let mut handle = WaylandWindowHandle::empty();
-        handle.surface = layer.wl_surface().id().as_ptr() as *mut _;
-        let window_handle = RawWindowHandle::Wayland(handle);
-
-        RawWaylandHandle(display_handle, window_handle)
-    };
-
-    let wgpu_surface = unsafe {
-        wgpu_instance
-            .create_surface(&handle)
-            .context("failed to create wgpu surface")?
-    };
-
-    let (format, (device, queue), adapter) = futures::executor::block_on(async {
-        let adapter = wgpu::util::initialize_adapter_from_env_or_default(
-            &wgpu_instance,
+    let adapter = futures::executor::block_on(async {
+        wgpu::util::initialize_adapter_from_env_or_default(
+            &instance,
             Backends::GL | Backends::VULKAN,
-            Some(&wgpu_surface),
+            None,
         )
         .await
-        .expect("Create adapter");
-
-        let adapter_features = adapter.features();
-
-        let needed_limits = wgpu::Limits::default();
-
-        let capabilities = wgpu_surface.get_capabilities(&adapter);
-
-        (
-            capabilities
-                .formats
-                .iter()
-                .copied()
-                .find(wgpu::TextureFormat::is_srgb)
-                .or_else(|| capabilities.formats.first().copied())
-                .expect("Get preferred format"),
-            adapter
-                .request_device(
-                    &wgpu::DeviceDescriptor {
-                        label: None,
-                        features: adapter_features & wgpu::Features::default(),
-                        limits: needed_limits,
-                    },
-                    None,
-                )
-                .await
-                .expect("Request device"),
-            adapter,
-        )
+        .unwrap()
     });
 
-    let backend = iced_wgpu::Backend::new(
-        &device,
-        &queue,
-        iced_wgpu::Settings {
-            present_mode: wgpu::PresentMode::Mailbox,
-            internal_backend: Backends::GL | Backends::VULKAN,
-            ..Default::default()
-        },
-        format,
-    );
+    let adapter = Arc::new(adapter);
 
-    let mut renderer: Renderer<iced_wgpu::Backend, Theme> = Renderer::new(backend);
+    let adapter_features = adapter.features();
+    let needed_limits = wgpu::Limits::default();
 
-    let prog = iced_runtime::program::State::new(
-        Prog::default(),
-        Size::new(width as f32, height as f32),
-        &mut renderer,
-        &mut Debug::new(),
-    );
+    // TODO: Speed up
+    debug!("get format, create device and queue, adapter");
+    let (device, queue) = futures::executor::block_on(async {
+        adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    label: None,
+                    features: adapter_features & wgpu::Features::default(),
+                    limits: needed_limits,
+                },
+                None,
+            )
+            .await
+            .expect("Request device")
+    });
 
-    let mut state = State {
-        registry_state: RegistryState::new(&globals),
-        seat_state: SeatState::new(&globals, &queue_handle),
-        output_state: OutputState::new(&globals, &queue_handle),
+    let device = Arc::new(device);
+    let queue = Arc::new(queue);
 
-        layer,
-        width,
-        height,
-        viewport: Viewport::with_physical_size(Size::new(width, height), 1.0),
+    let (mut state1, mut event_loop1, renderer) = State::new(
+        (256, 128),
+        Anchor::TOP,
+        Box::new(|_| {
+            iced::widget::column![slider(0.0..=1.0, 0.5, |_| { SnowcapMessage::Nothing }).step(0.1)]
+                .into()
+        }),
+        &conn,
+        &instance,
+        adapter.clone(),
+        device.clone(),
+        queue.clone(),
+        None,
+        None,
+    )?;
+    let (mut state5, mut event_loop5, _) = State::new(
+        (256, 128),
+        Anchor::BOTTOM,
+        Box::new(|_| {
+            iced::widget::column![slider(0.0..=1.0, 0.5, |_| { SnowcapMessage::Nothing }).step(0.1)]
+                .into()
+        }),
+        &conn,
+        &instance,
+        adapter.clone(),
+        device.clone(),
+        queue.clone(),
+        Some(renderer.clone()),
+        Some(state1.capabilities.clone()),
+    )?;
+    let (mut state4, mut event_loop4, _) = State::new(
+        (256, 128),
+        Anchor::BOTTOM | Anchor::RIGHT,
+        Box::new(|_| {
+            iced::widget::column![slider(0.0..=1.0, 0.5, |_| { SnowcapMessage::Nothing }).step(0.1)]
+                .into()
+        }),
+        &conn,
+        &instance,
+        adapter.clone(),
+        device.clone(),
+        queue.clone(),
+        Some(renderer.clone()),
+        Some(state1.capabilities.clone()),
+    )?;
+    let (mut state3, mut event_loop3, _) = State::new(
+        (256, 128),
+        Anchor::BOTTOM | Anchor::LEFT,
+        Box::new(|_| {
+            iced::widget::column![slider(0.0..=1.0, 0.5, |_| { SnowcapMessage::Nothing }).step(0.1)]
+                .into()
+        }),
+        &conn,
+        &instance,
+        adapter.clone(),
+        device.clone(),
+        queue.clone(),
+        Some(renderer.clone()),
+        Some(state1.capabilities.clone()),
+    )?;
 
-        exit: false,
-
-        adapter,
-        device,
-        queue,
-        surface: wgpu_surface,
-        renderer,
-
-        program: prog,
-        clipboard: unsafe { WaylandClipboard::new(conn.backend().display_ptr() as *mut _) },
-
-        keyboard: None,
-        keyboard_focus: false,
-        keyboard_modifiers: Modifiers::default(),
-
-        pointer: None,
-        pointer_location: (0.0, 0.0),
-
-        initial_configure_sent: false,
-    };
+    let (mut state2, mut event_loop2, _) = State::new(
+        (128, 256),
+        Anchor::TOP | Anchor::LEFT,
+        Box::new(|_| {
+            iced::widget::column![
+                slider(0.0..=1.0, 0.5, |_| { SnowcapMessage::Nothing }).step(0.1),
+                slider(0.0..=1.0, 0.2, |_| { SnowcapMessage::Nothing }).step(0.1),
+                slider(0.0..=1.0, 0.6, |_| { SnowcapMessage::Nothing }).step(0.1),
+            ]
+            .into()
+        }),
+        &conn,
+        &instance,
+        adapter.clone(),
+        device.clone(),
+        queue.clone(),
+        Some(renderer.clone()),
+        Some(state1.capabilities.clone()),
+    )?;
 
     loop {
-        // tracing::debug!("TOP OF LOOP");
-        event_queue.blocking_dispatch(&mut state).unwrap();
+        event_loop1.dispatch(Duration::from_millis(6), &mut state1)?;
+        event_loop2.dispatch(Duration::from_millis(6), &mut state2)?;
+        event_loop3.dispatch(Duration::from_millis(6), &mut state3)?;
+        event_loop4.dispatch(Duration::from_millis(6), &mut state4)?;
+        event_loop5.dispatch(Duration::from_millis(6), &mut state5)?;
 
-        state.update_widgets();
-
-        if state.exit {
+        if state1.exit || state2.exit {
             break;
         }
     }
 
-    drop(state.surface);
-    drop(state.layer);
+    drop(state1.surface);
+    drop(state1.layer);
 
     Ok(())
 }
@@ -262,16 +418,17 @@ fn main() -> anyhow::Result<()> {
 impl CompositorHandler for State {
     fn scale_factor_changed(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        surface: &WlSurface,
-        new_factor: i32,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _surface: &WlSurface,
+        _new_factor: i32,
     ) {
     }
 
     fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, time: u32) {
+        tracing::trace!("CompositorHandler::frame");
         self.update_widgets();
-        self.draw(qh);
+        self.draw(qh, surface);
     }
 }
 
@@ -290,20 +447,21 @@ impl OutputHandler for State {
 impl LayerShellHandler for State {
     fn closed(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        layer: &wlr_layer::LayerSurface,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _layer: &wlr_layer::LayerSurface,
     ) {
     }
 
     fn configure(
         &mut self,
-        conn: &Connection,
+        _conn: &Connection,
         qh: &QueueHandle<Self>,
         layer: &wlr_layer::LayerSurface,
         configure: wlr_layer::LayerSurfaceConfigure,
-        serial: u32,
+        _serial: u32,
     ) {
+        debug!("configure");
         let (new_width, new_height) = configure.new_size;
         if new_width != 0 {
             self.width = new_width;
@@ -312,7 +470,9 @@ impl LayerShellHandler for State {
             self.height = new_height;
         }
 
-        let cap = self.surface.get_capabilities(&self.adapter);
+        debug!("get capabilities");
+        let cap = &self.capabilities;
+        debug!("create surface_config");
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: cap.formats[0],
@@ -323,13 +483,15 @@ impl LayerShellHandler for State {
             view_formats: vec![cap.formats[0]],
         };
 
+        debug!("configure surface"); // PERF: SLOW
         self.surface.configure(&self.device, &surface_config);
 
+        debug!("update_widgets");
         self.update_widgets();
 
         if !self.initial_configure_sent {
             self.initial_configure_sent = true;
-            self.draw(qh);
+            self.draw(qh, layer.wl_surface());
         }
     }
 }
@@ -421,7 +583,7 @@ impl KeyboardHandler for State {
         _serial: u32,
         event: KeyEvent,
     ) {
-        tracing::debug!("start of press_key");
+        debug!("start of press_key");
         if !self.keyboard_focus {
             return;
         }
@@ -459,7 +621,7 @@ impl KeyboardHandler for State {
             modifiers,
         });
 
-        self.program.queue_event(event);
+        self.widget.queue_event(event);
     }
 
     fn release_key(
@@ -507,7 +669,7 @@ impl KeyboardHandler for State {
             modifiers,
         });
 
-        self.program.queue_event(event);
+        self.widget.queue_event(event);
     }
 
     fn update_modifiers(
@@ -530,6 +692,7 @@ impl PointerHandler for State {
         _pointer: &WlPointer,
         events: &[PointerEvent],
     ) {
+        trace!("pointer_frame");
         for event in events {
             if &event.surface != self.layer.wl_surface() {
                 continue;
@@ -594,7 +757,7 @@ impl PointerHandler for State {
                 }
             };
 
-            self.program.queue_event(iced_event);
+            self.widget.queue_event(iced_event);
         }
     }
 }
@@ -616,8 +779,11 @@ impl ProvidesRegistryState for State {
 }
 
 impl State {
-    pub fn draw(&mut self, queue_handle: &QueueHandle<Self>) {
-        // tracing::debug!("DRAWING");
+    pub fn draw(&mut self, queue_handle: &QueueHandle<Self>, surface: &WlSurface) {
+        tracing::trace!("State::draw");
+        if self.layer.wl_surface() != surface {
+            return;
+        }
         match self.surface.get_current_texture() {
             Ok(frame) => {
                 let mut encoder = self
@@ -630,7 +796,8 @@ impl State {
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                self.renderer.with_primitives(|backend, primitives| {
+                let mut renderer = self.renderer.lock().unwrap();
+                renderer.with_primitives(|backend, primitives| {
                     backend.present::<String>(
                         &self.device,
                         &self.queue,
@@ -661,13 +828,15 @@ impl State {
     }
 
     pub fn update_widgets(&mut self) {
-        let _ = self.program.update(
+        tracing::trace!("State::update_widgets");
+        let mut renderer = self.renderer.lock().unwrap();
+        let _ = self.widget.update(
             self.viewport.logical_size(),
             iced::mouse::Cursor::Available(iced::Point {
                 x: self.pointer_location.0 as f32,
                 y: self.pointer_location.1 as f32,
             }),
-            &mut self.renderer,
+            &mut renderer,
             &Theme::Dark,
             &iced_wgpu::core::renderer::Style {
                 text_color: Color::WHITE,
