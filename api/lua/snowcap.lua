@@ -92,7 +92,7 @@ function snowcap.setup(config_func)
 		return
 	end
 
-	---@type fun(args: table?)[]
+	---@type fun(args: Args?)[]
 	CallbackTable = {}
 
 	---This is an internal global function used to send serialized messages to the Pinnacle server.
@@ -149,6 +149,7 @@ function snowcap.setup(config_func)
 				end
 			end
 
+			print("reading msg")
 			local msg_len_bytes, err_msg, err_num = read_exact(socket_fd, 4)
 			assert(msg_len_bytes)
 
@@ -171,7 +172,7 @@ function snowcap.setup(config_func)
 					unread_cb_msgs[inc_msg.CallCallback.callback_id] = inc_msg
 					-- elseif inc_msg.RequestResponse.request_id ~= req_id then
 					-- 	unread_req_msgs[inc_msg.RequestResponse.request_id] = inc_msg
-					-- else
+				else
 					return inc_msg
 				end
 			else
@@ -194,6 +195,7 @@ function snowcap.setup(config_func)
 
 		if inc_msg.CallCallback and inc_msg.CallCallback.callback_id then
 			if inc_msg.CallCallback.args then -- TODO: can just inline
+				print("got args")
 				CallbackTable[inc_msg.CallCallback.callback_id](inc_msg.CallCallback.args)
 			else
 				CallbackTable[inc_msg.CallCallback.callback_id](nil)

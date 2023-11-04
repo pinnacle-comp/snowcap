@@ -102,4 +102,6 @@ enum LengthDef {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum Args {}
+pub enum Args {
+    SliderValue(f32),
+}

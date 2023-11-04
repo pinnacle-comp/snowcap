@@ -1,6 +1,7 @@
 use std::{
     cell::{OnceCell, RefCell},
     collections::HashMap,
+    os::unix::net::UnixStream,
     rc::Rc,
     sync::atomic::{AtomicU32, Ordering},
 };
@@ -53,7 +54,11 @@ use smithay_client_toolkit::{
 };
 use tracing::{debug, trace};
 
-use crate::{api::msg::WidgetDefinition, clipboard::WaylandClipboard, RawWaylandHandle};
+use crate::{
+    api::msg::{Args, OutgoingMsg, WidgetDefinition},
+    clipboard::WaylandClipboard,
+    RawWaylandHandle,
+};
 
 pub struct SnowcapWidgetProgram {
     pub widgets: WidgetFn,
@@ -108,6 +113,7 @@ impl SnowcapWidget {
         (width, height): (u32, u32),
         anchor: Anchor,
         widget_def: WidgetDefinition,
+        stream: UnixStream,
     ) -> anyhow::Result<(Self, EventLoop<'static, Self>)> {
         debug!("top of State::new");
         debug!("init registry");
@@ -195,7 +201,7 @@ impl SnowcapWidget {
             Rc::new(RefCell::new(renderer))
         });
 
-        let WidgetDefinitionReturn { widget, states } = widget_def.into_widget();
+        let WidgetDefinitionReturn { widget, states } = widget_def.into_widget(stream);
 
         let state = {
             let mut ren = renderer.borrow_mut();
@@ -721,17 +727,21 @@ pub struct WidgetDefinitionReturn {
 static WIDGET_ID: AtomicU32 = AtomicU32::new(0);
 
 impl WidgetDefinition {
-    pub fn into_widget(self) -> WidgetDefinitionReturn {
+    pub fn into_widget(self, stream: UnixStream) -> WidgetDefinitionReturn {
         let mut states = HashMap::<u32, WidgetStates>::new();
 
         WIDGET_ID.store(0, Ordering::Relaxed);
 
-        let widget = self.into_widget_inner(&mut states);
+        let widget = self.into_widget_inner(&mut states, stream);
 
         WidgetDefinitionReturn { widget, states }
     }
 
-    pub fn into_widget_inner(self, states: &mut HashMap<u32, WidgetStates>) -> WidgetFn {
+    pub fn into_widget_inner(
+        self,
+        states: &mut HashMap<u32, WidgetStates>,
+        stream: UnixStream,
+    ) -> WidgetFn {
         let index = WIDGET_ID.fetch_add(1, Ordering::Relaxed);
 
         match self {
@@ -750,10 +760,27 @@ impl WidgetDefinition {
                 states.insert(index, widget_state);
 
                 let f: WidgetFn = Box::new(move |prog| {
+                    let stream_clone = stream.try_clone().unwrap();
                     let slider = Slider::new(
                         range_start..=range_end,
                         prog.widget_state.get(&index).unwrap().assume_slider(),
-                        move |val| SnowcapMessage::Update(index, WidgetStates::Slider(val)),
+                        move |val| {
+                            tracing::debug!("writing CallCallback");
+                            let mut stream_clone = stream_clone.try_clone().unwrap();
+                            crate::api::send_to_client(
+                                &mut stream_clone,
+                                &OutgoingMsg::CallCallback {
+                                    callback_id: on_change,
+                                    args: Some(Args::SliderValue(val)),
+                                },
+                            )
+                            .unwrap();
+                            // rmp_serde::encode::write_named(
+                            //     &mut stream_clone,
+                            // )
+                            // .unwrap();
+                            SnowcapMessage::Update(index, WidgetStates::Slider(val))
+                        },
                     )
                     .width(width)
                     .height(height)
@@ -775,7 +802,7 @@ impl WidgetDefinition {
             } => {
                 let children_widget_fns = children
                     .into_iter()
-                    .map(move |def| def.into_widget_inner(states))
+                    .map(move |def| def.into_widget_inner(states, stream.try_clone().unwrap()))
                     .collect::<Vec<_>>();
 
                 let f: WidgetFn = Box::new(move |prog| {
@@ -802,7 +829,7 @@ impl WidgetDefinition {
                 padding,
                 child,
             } => {
-                let child = child.into_widget_inner(states);
+                let child = child.into_widget_inner(states, stream);
 
                 let f: WidgetFn = Box::new(move |prog| {
                     let button = Button::new(child(prog))

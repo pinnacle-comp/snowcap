@@ -84,3 +84,4 @@
 ---@field args Args?
 
 ---@class Args
+---@field SliderValue float?

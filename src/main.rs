@@ -122,6 +122,7 @@ impl State {
             (width, height),
             anchor,
             widget_def,
+            self.stream.as_ref().unwrap().try_clone().unwrap(), // TODO: unwraps
         ) {
             self.widgets.push(widget);
         }
@@ -286,6 +287,7 @@ fn main() -> anyhow::Result<()> {
     state_loop
         .handle()
         .insert_source(source, |stream, _, state| {
+            tracing::debug!("got new stream");
             if let Some(stream) = state.stream.replace(stream) {
                 if let Err(err) = stream.shutdown(std::net::Shutdown::Both) {
                     tracing::error!("Error shutting down stream: {err}");
