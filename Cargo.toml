@@ -12,7 +12,10 @@ iced_runtime = "0.1.1"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"]}
 raw-window-handle = "0.5.2"
-tokio = { version = "1.32.0", features = ["full"] }
 futures = "0.3.28"
 smithay-clipboard = "0.6.6"
-lazy_static = "1.4.0"
+serde = { version = "1.0.188", features = ["derive"] }
+rmp = { version = "0.8.12" }
+rmp-serde = { version = "1.1.2" }
+xdg = "2.5.2"
+sysinfo = "0.29.10"

@@ -1,7 +1,16 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    cell::{OnceCell, RefCell},
+    collections::HashMap,
+    rc::Rc,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use anyhow::Context;
-use iced::{mouse::ScrollDelta, Color, Size, Theme};
+use iced::{
+    mouse::ScrollDelta,
+    widget::{Button, Column, Slider, Text},
+    Color, Size, Theme,
+};
 use iced_runtime::{Command, Debug, Program};
 use iced_wgpu::{
     core::Element,
@@ -44,12 +53,11 @@ use smithay_client_toolkit::{
 };
 use tracing::{debug, trace};
 
-use crate::{
-    clipboard::WaylandClipboard, RawWaylandHandle, ADAPTER, CONN, DEVICE, INSTANCE, QUEUE, RENDERER,
-};
+use crate::{api::msg::WidgetDefinition, clipboard::WaylandClipboard, RawWaylandHandle};
 
 pub struct SnowcapWidgetProgram {
     pub widgets: WidgetFn,
+    pub widget_state: HashMap<u32, WidgetStates>,
 }
 
 pub type WidgetFn = Box<
@@ -61,14 +69,16 @@ pub struct SnowcapWidget {
     pub seat_state: SeatState,
     pub output_state: OutputState,
 
+    // surface must be dropped before layer
+    pub surface: wgpu::Surface,
+    pub dirty: bool,
+
     pub widget: iced_runtime::program::State<SnowcapWidgetProgram>,
     pub layer: LayerSurface,
     pub width: u32,
     pub height: u32,
     pub viewport: Viewport,
     pub capabilities: wgpu::SurfaceCapabilities,
-
-    pub surface: wgpu::Surface,
 
     pub clipboard: WaylandClipboard,
 
@@ -80,18 +90,29 @@ pub struct SnowcapWidget {
     pub pointer_location: (f64, f64),
 
     pub initial_configure_sent: bool,
+
+    pub device: Rc<wgpu::Device>,
+    pub queue: Rc<wgpu::Queue>,
+    pub renderer: Rc<RefCell<iced_wgpu::Renderer<Theme>>>,
 }
 
 impl SnowcapWidget {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
+        conn: &Connection,
+        instance: &wgpu::Instance,
+        adapter: &wgpu::Adapter,
+        device: Rc<wgpu::Device>,
+        queue: Rc<wgpu::Queue>,
+        renderer: &OnceCell<Rc<RefCell<iced_wgpu::Renderer<Theme>>>>,
         (width, height): (u32, u32),
         anchor: Anchor,
-        widgets: WidgetFn,
+        widget_def: WidgetDefinition,
     ) -> anyhow::Result<(Self, EventLoop<'static, Self>)> {
         debug!("top of State::new");
         debug!("init registry");
         let (globals, event_queue) =
-            registry_queue_init::<Self>(&CONN).context("failed to init registry queue")?;
+            registry_queue_init::<Self>(conn).context("failed to init registry queue")?;
 
         let queue_handle = event_queue.handle();
 
@@ -129,7 +150,7 @@ impl SnowcapWidget {
         debug!("create wayland handle");
         let wayland_handle = {
             let mut handle = WaylandDisplayHandle::empty();
-            handle.display = CONN.backend().display_ptr() as *mut _;
+            handle.display = conn.backend().display_ptr() as *mut _;
             let display_handle = RawDisplayHandle::Wayland(handle);
 
             let mut handle = WaylandWindowHandle::empty();
@@ -140,11 +161,11 @@ impl SnowcapWidget {
         };
 
         debug!("create wgpu surface");
-        let wgpu_surface = unsafe { INSTANCE.create_surface(&wayland_handle).unwrap() };
+        let wgpu_surface = unsafe { instance.create_surface(&wayland_handle).unwrap() };
 
         debug!("get capabilities"); // PERF: SLOW
-        let capabilities = wgpu_surface.get_capabilities(&ADAPTER);
-        let renderer = RENDERER.get_or_init(|| {
+        let capabilities = wgpu_surface.get_capabilities(adapter);
+        let renderer = renderer.get_or_init(|| {
             debug!("get texture format");
             let format = capabilities
                 .formats
@@ -159,8 +180,8 @@ impl SnowcapWidget {
             // TODO: speed up
             debug!("create iced backend"); // PERF: SLOW
             let backend = iced_wgpu::Backend::new(
-                &DEVICE,
-                &QUEUE,
+                &device,
+                &queue,
                 iced_wgpu::Settings {
                     present_mode: wgpu::PresentMode::Mailbox,
                     internal_backend: Backends::GL | Backends::VULKAN,
@@ -171,17 +192,24 @@ impl SnowcapWidget {
 
             debug!("create iced renderer");
             let renderer: Renderer<iced_wgpu::Backend, Theme> = Renderer::new(backend);
-            Arc::new(Mutex::new(renderer))
+            Rc::new(RefCell::new(renderer))
         });
 
-        let mut ren = renderer.lock().unwrap();
+        let WidgetDefinitionReturn { widget, states } = widget_def.into_widget();
 
-        let state = iced_runtime::program::State::new(
-            SnowcapWidgetProgram { widgets },
-            Size::new(width as f32, height as f32),
-            &mut ren,
-            &mut Debug::new(),
-        );
+        let state = {
+            let mut ren = renderer.borrow_mut();
+
+            iced_runtime::program::State::new(
+                SnowcapWidgetProgram {
+                    widgets: widget,
+                    widget_state: states,
+                },
+                Size::new(width as f32, height as f32),
+                &mut ren,
+                &mut Debug::new(), // TODO:
+            )
+        };
 
         debug!("create state");
         let state = SnowcapWidget {
@@ -196,9 +224,11 @@ impl SnowcapWidget {
             viewport: Viewport::with_physical_size(Size::new(width, height), 1.0),
             capabilities,
 
+            dirty: true,
+
             surface: wgpu_surface,
 
-            clipboard: unsafe { WaylandClipboard::new(CONN.backend().display_ptr() as *mut _) },
+            clipboard: unsafe { WaylandClipboard::new(conn.backend().display_ptr() as *mut _) },
 
             keyboard: None,
             keyboard_focus: false,
@@ -208,14 +238,18 @@ impl SnowcapWidget {
             pointer_location: (0.0, 0.0),
 
             initial_configure_sent: false,
+
+            device: device.clone(),
+            queue,
+            renderer: renderer.clone(),
         };
 
-        drop(ren);
+        state.configure_wgpu_surface(&device);
 
         Ok((state, event_loop))
     }
 
-    pub fn configure_wgpu_surface(&self) {
+    pub fn configure_wgpu_surface(&self, device: &wgpu::Device) {
         let capabilities = &self.capabilities;
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -227,7 +261,7 @@ impl SnowcapWidget {
             view_formats: vec![capabilities.formats[0]],
         };
 
-        self.surface.configure(&DEVICE, &surface_config);
+        self.surface.configure(device, &surface_config);
     }
 }
 
@@ -581,33 +615,36 @@ impl SnowcapWidget {
         if self.layer.wl_surface() != surface {
             return;
         }
+        // if !self.dirty {
+        //     return;
+        // }
         match self.surface.get_current_texture() {
             Ok(frame) => {
-                let mut encoder =
-                    DEVICE.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-                // let program = self.program.program();
+                let mut encoder = self
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
                 let view = frame
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
-                let renderer = RENDERER.get().unwrap();
-                let mut renderer = renderer.lock().unwrap();
-                renderer.with_primitives(|backend, primitives| {
-                    backend.present::<String>(
-                        &DEVICE,
-                        &QUEUE,
-                        &mut encoder,
-                        Some(iced::Color::new(0.6, 0.6, 0.6, 1.0)),
-                        &view,
-                        primitives,
-                        &self.viewport,
-                        &[],
-                    );
-                });
+                {
+                    let mut renderer = self.renderer.borrow_mut();
+                    renderer.with_primitives(|backend, primitives| {
+                        backend.present::<String>(
+                            &self.device,
+                            &self.queue,
+                            &mut encoder,
+                            Some(iced::Color::new(0.6, 0.6, 0.6, 1.0)),
+                            &view,
+                            primitives,
+                            &self.viewport,
+                            &[],
+                        );
+                    });
+                }
 
-                QUEUE.submit(Some(encoder.finish()));
+                self.queue.submit(Some(encoder.finish()));
                 frame.present();
 
                 self.layer
@@ -622,12 +659,12 @@ impl SnowcapWidget {
             }
             Err(_) => todo!(),
         }
+        self.dirty = false;
     }
 
     pub fn update_widgets(&mut self) {
         tracing::trace!("State::update_widgets");
-        let renderer = RENDERER.get().unwrap();
-        let mut renderer = renderer.lock().unwrap();
+        let mut renderer = self.renderer.borrow_mut();
         let _ = self.widget.update(
             self.viewport.logical_size(),
             iced::mouse::Cursor::Available(iced::Point {
@@ -648,6 +685,7 @@ impl SnowcapWidget {
 #[derive(Debug, Clone)]
 pub enum SnowcapMessage {
     Nothing,
+    Update(u32, WidgetStates),
 }
 
 impl Program for SnowcapWidgetProgram {
@@ -658,12 +696,150 @@ impl Program for SnowcapWidgetProgram {
     fn update(&mut self, message: Self::Message) -> iced_runtime::Command<Self::Message> {
         match message {
             SnowcapMessage::Nothing => (),
+            SnowcapMessage::Update(index, state) => {
+                self.widget_state.insert(index, state);
+            }
         }
 
         Command::none()
+
+        // Command::perform(async { println!("hello from future") }, |_| {
+        //     SnowcapMessage::Nothing
+        // })
     }
 
     fn view(&self) -> Element<'_, Self::Message, Self::Renderer> {
         (self.widgets)(self)
+    }
+}
+
+pub struct WidgetDefinitionReturn {
+    widget: WidgetFn,
+    states: HashMap<u32, WidgetStates>,
+}
+
+static WIDGET_ID: AtomicU32 = AtomicU32::new(0);
+
+impl WidgetDefinition {
+    pub fn into_widget(self) -> WidgetDefinitionReturn {
+        let mut states = HashMap::<u32, WidgetStates>::new();
+
+        WIDGET_ID.store(0, Ordering::Relaxed);
+
+        let widget = self.into_widget_inner(&mut states);
+
+        WidgetDefinitionReturn { widget, states }
+    }
+
+    pub fn into_widget_inner(self, states: &mut HashMap<u32, WidgetStates>) -> WidgetFn {
+        let index = WIDGET_ID.fetch_add(1, Ordering::Relaxed);
+
+        match self {
+            WidgetDefinition::Slider {
+                range_start,
+                range_end,
+                // value,
+                on_change,
+                on_release,
+                width,
+                height,
+                step,
+            } => {
+                let widget_state = WidgetStates::Slider(range_start);
+
+                states.insert(index, widget_state);
+
+                let f: WidgetFn = Box::new(move |prog| {
+                    let slider = Slider::new(
+                        range_start..=range_end,
+                        prog.widget_state.get(&index).unwrap().assume_slider(),
+                        move |val| SnowcapMessage::Update(index, WidgetStates::Slider(val)),
+                    )
+                    .width(width)
+                    .height(height)
+                    .step(step);
+
+                    slider.into()
+                });
+
+                f
+            }
+            WidgetDefinition::Column {
+                spacing,
+                padding,
+                width,
+                height,
+                max_width,
+                alignment,
+                children,
+            } => {
+                let children_widget_fns = children
+                    .into_iter()
+                    .map(move |def| def.into_widget_inner(states))
+                    .collect::<Vec<_>>();
+
+                let f: WidgetFn = Box::new(move |prog| {
+                    let mut column = Column::new()
+                        .spacing(spacing)
+                        .padding(padding)
+                        .width(width)
+                        .height(height)
+                        .max_width(max_width)
+                        .align_items(alignment);
+
+                    for child in children_widget_fns.iter() {
+                        column = column.push(child(prog));
+                    }
+
+                    column.into()
+                });
+
+                f
+            }
+            WidgetDefinition::Button {
+                width,
+                height,
+                padding,
+                child,
+            } => {
+                let child = child.into_widget_inner(states);
+
+                let f: WidgetFn = Box::new(move |prog| {
+                    let button = Button::new(child(prog))
+                        .width(width)
+                        .height(height)
+                        .padding(padding)
+                        .on_press(SnowcapMessage::Nothing);
+
+                    button.into()
+                });
+
+                f
+            }
+            WidgetDefinition::Text { text } => {
+                let f: WidgetFn = Box::new(move |_prog| {
+                    let text = Text::new(text.clone()); // PERF: find a way to not clone everytime
+                                                        // |     this function is called
+
+                    text.into()
+                });
+
+                f
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum WidgetStates {
+    Slider(f32),
+}
+
+impl WidgetStates {
+    pub fn assume_slider(&self) -> f32 {
+        match self {
+            WidgetStates::Slider(f) => *f,
+            _ => panic!(),
+        }
     }
 }
