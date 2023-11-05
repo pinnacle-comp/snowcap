@@ -1,7 +1,6 @@
 use std::{
     cell::{OnceCell, RefCell},
     collections::HashMap,
-    os::unix::net::UnixStream,
     rc::Rc,
     sync::atomic::{AtomicU32, Ordering},
 };
@@ -27,23 +26,24 @@ use smithay_client_toolkit::{
     delegate_registry, delegate_seat,
     output::{OutputHandler, OutputState},
     reexports::{
-        calloop::EventLoop,
+        calloop::{EventLoop, LoopHandle},
+        calloop_wayland_source::WaylandSource,
         client::{
             globals::registry_queue_init,
             protocol::{
                 wl_keyboard::{self, WlKeyboard},
-                wl_output::WlOutput,
+                wl_output::{self, WlOutput},
                 wl_pointer::{self, AxisSource, WlPointer},
                 wl_seat::WlSeat,
                 wl_surface::WlSurface,
             },
-            Connection, Proxy, QueueHandle, WaylandSource,
+            Connection, Proxy, QueueHandle,
         },
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
-        keyboard::{KeyEvent, KeyboardHandler, Modifiers},
+        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
         pointer::{PointerEvent, PointerEventKind, PointerHandler},
         Capability, SeatHandler, SeatState,
     },
@@ -57,7 +57,7 @@ use tracing::{debug, trace};
 use crate::{
     api::msg::{Args, OutgoingMsg, WidgetDefinition},
     clipboard::WaylandClipboard,
-    RawWaylandHandle,
+    RawWaylandHandle, State,
 };
 
 pub struct SnowcapWidgetProgram {
@@ -113,7 +113,7 @@ impl SnowcapWidget {
         (width, height): (u32, u32),
         anchor: Anchor,
         widget_def: WidgetDefinition,
-        stream: UnixStream,
+        state_loop_handle: &LoopHandle<'static, State>,
     ) -> anyhow::Result<(Self, EventLoop<'static, Self>)> {
         debug!("top of State::new");
         debug!("init registry");
@@ -126,7 +126,7 @@ impl SnowcapWidget {
         let event_loop = EventLoop::<Self>::try_new()?;
         let loop_handle = event_loop.handle();
         debug!("create wayland source");
-        WaylandSource::new(event_queue)?
+        WaylandSource::new(conn.clone(), event_queue)
             .insert(loop_handle.clone())
             .expect("failed to insert wayland source into event loop");
 
@@ -201,7 +201,7 @@ impl SnowcapWidget {
             Rc::new(RefCell::new(renderer))
         });
 
-        let WidgetDefinitionReturn { widget, states } = widget_def.into_widget(stream);
+        let WidgetDefinitionReturn { widget, states } = widget_def.into_widget(state_loop_handle);
 
         let state = {
             let mut ren = renderer.borrow_mut();
@@ -291,6 +291,16 @@ impl CompositorHandler for SnowcapWidget {
         tracing::trace!("CompositorHandler::frame");
         self.update_widgets();
         self.draw(qh, surface);
+    }
+
+    fn transform_changed(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: &WlSurface,
+        new_transform: wl_output::Transform,
+    ) {
+        todo!()
     }
 }
 
@@ -388,7 +398,7 @@ impl KeyboardHandler for SnowcapWidget {
         surface: &WlSurface,
         _serial: u32,
         _raw: &[u32],
-        _keysyms: &[u32],
+        _keysyms: &[Keysym],
     ) {
         if self.layer.wl_surface() != surface {
             return;
@@ -425,7 +435,7 @@ impl KeyboardHandler for SnowcapWidget {
             return;
         }
 
-        let Some(keycode) = crate::keyboard::raw_key_to_keycode(event.raw_code) else {
+        let Some(keycode) = crate::keyboard::keysym_to_keycode(event.keysym) else {
             return;
         };
 
@@ -473,7 +483,7 @@ impl KeyboardHandler for SnowcapWidget {
             return;
         }
 
-        let Some(keycode) = crate::keyboard::raw_key_to_keycode(event.raw_code) else {
+        let Some(keycode) = crate::keyboard::keysym_to_keycode(event.keysym) else {
             return;
         };
 
@@ -727,12 +737,12 @@ pub struct WidgetDefinitionReturn {
 static WIDGET_ID: AtomicU32 = AtomicU32::new(0);
 
 impl WidgetDefinition {
-    pub fn into_widget(self, stream: UnixStream) -> WidgetDefinitionReturn {
+    pub fn into_widget(self, loop_handle: &LoopHandle<'static, State>) -> WidgetDefinitionReturn {
         let mut states = HashMap::<u32, WidgetStates>::new();
 
         WIDGET_ID.store(0, Ordering::Relaxed);
 
-        let widget = self.into_widget_inner(&mut states, stream);
+        let widget = self.into_widget_inner(&mut states, loop_handle.clone());
 
         WidgetDefinitionReturn { widget, states }
     }
@@ -740,7 +750,7 @@ impl WidgetDefinition {
     pub fn into_widget_inner(
         self,
         states: &mut HashMap<u32, WidgetStates>,
-        stream: UnixStream,
+        loop_handle: LoopHandle<'static, State>,
     ) -> WidgetFn {
         let index = WIDGET_ID.fetch_add(1, Ordering::Relaxed);
 
@@ -760,25 +770,22 @@ impl WidgetDefinition {
                 states.insert(index, widget_state);
 
                 let f: WidgetFn = Box::new(move |prog| {
-                    let stream_clone = stream.try_clone().unwrap();
+                    let loop_handle = loop_handle.clone();
                     let slider = Slider::new(
                         range_start..=range_end,
                         prog.widget_state.get(&index).unwrap().assume_slider(),
                         move |val| {
                             tracing::debug!("writing CallCallback");
-                            let mut stream_clone = stream_clone.try_clone().unwrap();
-                            crate::api::send_to_client(
-                                &mut stream_clone,
-                                &OutgoingMsg::CallCallback {
-                                    callback_id: on_change,
-                                    args: Some(Args::SliderValue(val)),
-                                },
-                            )
-                            .unwrap();
-                            // rmp_serde::encode::write_named(
-                            //     &mut stream_clone,
-                            // )
-                            // .unwrap();
+                            loop_handle.insert_idle(move |state| {
+                                crate::api::send_to_client(
+                                    state.stream.as_mut().unwrap(),
+                                    &OutgoingMsg::CallCallback {
+                                        callback_id: on_change,
+                                        args: Some(Args::SliderValue(val)),
+                                    },
+                                )
+                                .unwrap();
+                            });
                             SnowcapMessage::Update(index, WidgetStates::Slider(val))
                         },
                     )
@@ -802,7 +809,7 @@ impl WidgetDefinition {
             } => {
                 let children_widget_fns = children
                     .into_iter()
-                    .map(move |def| def.into_widget_inner(states, stream.try_clone().unwrap()))
+                    .map(move |def| def.into_widget_inner(states, loop_handle.clone()))
                     .collect::<Vec<_>>();
 
                 let f: WidgetFn = Box::new(move |prog| {
@@ -829,7 +836,7 @@ impl WidgetDefinition {
                 padding,
                 child,
             } => {
-                let child = child.into_widget_inner(states, stream);
+                let child = child.into_widget_inner(states, loop_handle);
 
                 let f: WidgetFn = Box::new(move |prog| {
                     let button = Button::new(child(prog))

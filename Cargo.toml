@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-smithay-client-toolkit = "0.17.0"
+smithay-client-toolkit = "0.18.0"
 anyhow = { version = "1.0.75", features = ["backtrace"]}
 iced = { version = "0.10.0", features = ["wgpu", "tokio"] }
 iced_wgpu = "0.11.1"
@@ -13,9 +13,10 @@ tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"]}
 raw-window-handle = "0.5.2"
 futures = "0.3.28"
-smithay-clipboard = "0.6.6"
+smithay-clipboard = "0.7.0"
 serde = { version = "1.0.188", features = ["derive"] }
 rmp = { version = "0.8.12" }
 rmp-serde = { version = "1.1.2" }
 xdg = "2.5.2"
 sysinfo = "0.29.10"
+wayland-backend = { version = "0.3.2", features = ["client_system"]}

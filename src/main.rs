@@ -23,7 +23,7 @@ use raw_window_handle::{
 };
 use smithay_client_toolkit::{
     reexports::{
-        calloop::{self, EventLoop},
+        calloop::{self, EventLoop, LoopHandle},
         client::Connection,
     },
     shell::wlr_layer::Anchor,
@@ -45,7 +45,7 @@ unsafe impl HasRawWindowHandle for RawWaylandHandle {
     }
 }
 
-struct State {
+pub struct State {
     widgets: Vec<(SnowcapWidget, EventLoop<'static, SnowcapWidget>)>,
 
     stream: Option<UnixStream>,
@@ -59,10 +59,12 @@ struct State {
     device: Rc<wgpu::Device>,
     queue: Rc<wgpu::Queue>,
     renderer: OnceCell<Rc<RefCell<iced_wgpu::Renderer<Theme>>>>,
+
+    loop_handle: LoopHandle<'static, Self>,
 }
 
 impl State {
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new() -> anyhow::Result<(Self, EventLoop<'static, Self>)> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::GL | wgpu::Backends::VULKAN,
             ..Default::default()
@@ -94,16 +96,48 @@ impl State {
                 .expect("Request device")
         });
 
-        Ok(State {
-            widgets: vec![],
-            stream: None,
-            conn: Connection::connect_to_env()?,
-            instance,
-            adapter,
-            device: Rc::new(device),
-            queue: Rc::new(queue),
-            renderer: OnceCell::new(),
-        })
+        let event_loop = EventLoop::<State>::try_new()?;
+
+        let (sender, channel) = calloop::channel::channel::<Msg>();
+
+        let source = SnowcapSocketSource::new(sender, Path::new("/tmp"))?;
+
+        event_loop
+            .handle()
+            .insert_source(source, |stream, _, state| {
+                tracing::debug!("got new stream");
+                if let Some(stream) = state.stream.replace(stream) {
+                    if let Err(err) = stream.shutdown(std::net::Shutdown::Both) {
+                        tracing::error!("Error shutting down stream: {err}");
+                    }
+                }
+            })?;
+
+        event_loop
+            .handle()
+            .insert_source(channel, |msg, _, state| {
+                use calloop::channel::Event;
+                match msg {
+                    Event::Msg(msg) => state.handle_msg(msg),
+                    Event::Closed => todo!(),
+                }
+            })
+            .unwrap();
+
+        Ok((
+            State {
+                widgets: vec![],
+                stream: None,
+                conn: Connection::connect_to_env()?,
+                instance,
+                adapter,
+                device: Rc::new(device),
+                queue: Rc::new(queue),
+                renderer: OnceCell::new(),
+                loop_handle: event_loop.handle(),
+            },
+            event_loop,
+        ))
     }
 
     pub fn new_widget(
@@ -122,7 +156,7 @@ impl State {
             (width, height),
             anchor,
             widget_def,
-            self.stream.as_ref().unwrap().try_clone().unwrap(), // TODO: unwraps
+            &self.loop_handle,
         ) {
             self.widgets.push(widget);
         }
@@ -173,138 +207,7 @@ fn main() -> anyhow::Result<()> {
         .with_env_filter(env_filter)
         .init();
 
-    let mut state = State::new()?;
-
-    // state.new_widget(
-    //     (256, 128),
-    //     Anchor::TOP,
-    //     WidgetDefinition::Column {
-    //         spacing: 0,
-    //         padding: 0.into(),
-    //         width: iced::Length::Fill,
-    //         height: iced::Length::Fill,
-    //         max_width: 10000,
-    //         alignment: iced::Alignment::Center,
-    //         children: vec![
-    //             WidgetDefinition::Slider {
-    //                 range_start: 0.0,
-    //                 range_end: 1.0,
-    //                 value: api::msg::CallbackId(0),
-    //                 on_change: api::msg::CallbackId(0),
-    //                 on_release: None,
-    //                 width: iced::Length::Fill,
-    //                 height: 20,
-    //                 step: 0.1,
-    //             },
-    //             WidgetDefinition::Slider {
-    //                 range_start: 0.0,
-    //                 range_end: 1.0,
-    //                 value: api::msg::CallbackId(0),
-    //                 on_change: api::msg::CallbackId(0),
-    //                 on_release: None,
-    //                 width: iced::Length::Fill,
-    //                 height: 20,
-    //                 step: 0.1,
-    //             },
-    //             WidgetDefinition::Button {
-    //                 width: iced::Length::Fixed(50.0),
-    //                 height: iced::Length::Fixed(20.0),
-    //                 padding: 0.into(),
-    //                 child: Box::new(WidgetDefinition::Text {
-    //                     text: "hello".to_string(),
-    //                 }),
-    //             },
-    //         ],
-    //     },
-    // );
-    //
-    // state.new_widget(
-    //     (256, 128),
-    //     Anchor::BOTTOM,
-    //     WidgetDefinition::Slider {
-    //         range_start: 0.0,
-    //         range_end: 1.0,
-    //         value: api::msg::CallbackId(0),
-    //         on_change: api::msg::CallbackId(0),
-    //         on_release: None,
-    //         width: iced::Length::Fill,
-    //         height: 20,
-    //         step: 0.1,
-    //     },
-    // );
-    // state.new_widget(
-    //     (256, 128),
-    //     Anchor::BOTTOM | Anchor::RIGHT,
-    //     WidgetDefinition::Slider {
-    //         range_start: 0.0,
-    //         range_end: 1.0,
-    //         value: api::msg::CallbackId(0),
-    //         on_change: api::msg::CallbackId(0),
-    //         on_release: None,
-    //         width: iced::Length::Fill,
-    //         height: 20,
-    //         step: 0.1,
-    //     },
-    // );
-    // state.new_widget(
-    //     (256, 128),
-    //     Anchor::BOTTOM | Anchor::LEFT,
-    //     WidgetDefinition::Slider {
-    //         range_start: 0.0,
-    //         range_end: 1.0,
-    //         value: api::msg::CallbackId(0),
-    //         on_change: api::msg::CallbackId(0),
-    //         on_release: None,
-    //         width: iced::Length::Fill,
-    //         height: 20,
-    //         step: 0.1,
-    //     },
-    // );
-    //
-    // state.new_widget(
-    //     (128, 256),
-    //     Anchor::TOP | Anchor::LEFT,
-    //     WidgetDefinition::Slider {
-    //         range_start: 0.0,
-    //         range_end: 1.0,
-    //         value: api::msg::CallbackId(0),
-    //         on_change: api::msg::CallbackId(0),
-    //         on_release: None,
-    //         width: iced::Length::Fill,
-    //         height: 20,
-    //         step: 0.1,
-    //     },
-    // );
-
-    state.configure_wgpu_surfaces();
-
-    let mut state_loop = EventLoop::<State>::try_new()?;
-
-    let (sender, channel) = calloop::channel::channel::<Msg>();
-
-    let source = SnowcapSocketSource::new(sender, Path::new("/tmp"))?;
-
-    state_loop
-        .handle()
-        .insert_source(source, |stream, _, state| {
-            tracing::debug!("got new stream");
-            if let Some(stream) = state.stream.replace(stream) {
-                if let Err(err) = stream.shutdown(std::net::Shutdown::Both) {
-                    tracing::error!("Error shutting down stream: {err}");
-                }
-            }
-        })?;
-
-    state_loop
-        .handle()
-        .insert_source(channel, |msg, _, state| {
-            use calloop::channel::Event;
-            match msg {
-                Event::Msg(msg) => state.handle_msg(msg),
-                Event::Closed => todo!(),
-            }
-        })
-        .unwrap();
+    let (mut state, mut state_loop) = State::new()?;
 
     loop {
         state_loop.dispatch(Duration::ZERO, &mut state)?;
