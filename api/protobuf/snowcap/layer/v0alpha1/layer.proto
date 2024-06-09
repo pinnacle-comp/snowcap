@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package snowcap.layer.v0alpha1;
+
+import "snowcap/widget/v0alpha1/widget.proto";
+
+enum Anchor {
+  ANCHOR_UNSPECIFIED = 0;
+  ANCHOR_TOP = 1;
+  ANCHOR_BOTTOM = 2;
+  ANCHOR_LEFT = 3;
+  ANCHOR_RIGHT = 4;
+  ANCHOR_TOP_LEFT = 5;
+  ANCHOR_TOP_RIGHT = 6;
+  ANCHOR_BOTTOM_LEFT = 7;
+  ANCHOR_BOTTOM_RIGHT = 8;
+}
+
+enum KeyboardExclusivity {
+  KEYBOARD_EXCLUSIVITY_UNSPECIFIED = 0;
+  KEYBOARD_EXCLUSIVITY_NONE = 1;
+  KEYBOARD_EXCLUSIVITY_ON_DEMAND = 2;
+  KEYBOARD_EXCLUSIVITY_EXCLUSIVE = 3;
+}
+
+message NewLayerRequest {
+  optional snowcap.widget.v0alpha1.WidgetDef widget_def = 1;
+  optional uint32 width = 2;
+  optional uint32 height = 3;
+  optional Anchor anchor = 4;
+  optional KeyboardExclusivity keyboard_exclusivity = 5;
+}
+
+message NewLayerResponse {}
+
+service LayerService {
+  rpc NewLayer(NewLayerRequest) returns (NewLayerResponse);
+}

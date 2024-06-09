@@ -1,195 +1,191 @@
-use std::{
-    io::{self, Read, Write},
-    os::unix::net::{UnixListener, UnixStream},
-    path::Path,
-};
+use std::path::Path;
 
 use anyhow::Context;
-use smithay_client_toolkit::reexports::calloop::{
-    self, channel::Sender, generic::Generic, EventSource, Interest, Mode, PostAction,
+use smithay_client_toolkit::{reexports::calloop, shell::wlr_layer};
+use snowcap_api_defs::snowcap::layer::{
+    self,
+    v0alpha1::{
+        layer_service_server::{self, LayerServiceServer},
+        NewLayerRequest, NewLayerResponse,
+    },
 };
-use sysinfo::{ProcessRefreshKind, RefreshKind, SystemExt};
+use tonic::{Request, Response, Status};
+use tracing::{error, warn};
 
-use self::msg::{Msg, OutgoingMsg};
+use crate::{
+    layer::SnowcapLayer,
+    state::State,
+    widget::{widget_def_to_fn, WidgetFn},
+};
 
-pub mod msg;
+async fn run_unary_no_response<F>(
+    fn_sender: &StateFnSender,
+    with_state: F,
+) -> Result<Response<()>, Status>
+where
+    F: FnOnce(&mut State) + Send + 'static,
+{
+    fn_sender
+        .send(Box::new(with_state))
+        .map_err(|_| Status::internal("failed to execute request"))?;
 
-pub const DEFAULT_SOCKET_DIR: &str = "/tmp";
-pub const SOCKET_NAME: &str = "snowcap_socket";
-
-fn handle_client(mut stream: UnixStream, sender: Sender<Msg>) -> anyhow::Result<()> {
-    loop {
-        let mut len_marker_bytes = [0u8; 4];
-        if let Err(err) = stream.read_exact(&mut len_marker_bytes) {
-            if err.kind() == io::ErrorKind::UnexpectedEof {
-                tracing::warn!("stream closed: {}", err);
-                stream.shutdown(std::net::Shutdown::Both)?;
-                break Ok(());
-            }
-        };
-
-        let len_marker = u32::from_ne_bytes(len_marker_bytes);
-        let mut msg_bytes = vec![0u8; len_marker as usize];
-
-        if let Err(err) = stream.read_exact(msg_bytes.as_mut_slice()) {
-            if err.kind() == io::ErrorKind::UnexpectedEof {
-                tracing::warn!("stream closed: {}", err);
-                stream.shutdown(std::net::Shutdown::Both)?;
-                break Ok(());
-            }
-        };
-        let msg: Msg = rmp_serde::from_slice(msg_bytes.as_slice())?; // TODO: handle error
-
-        sender.send(msg)?;
-    }
+    Ok(Response::new(()))
 }
 
-pub struct SnowcapSocketSource {
-    socket: Generic<UnixListener>,
-    sender: Sender<Msg>,
+async fn run_unary<F, T>(fn_sender: &StateFnSender, with_state: F) -> Result<Response<T>, Status>
+where
+    F: FnOnce(&mut State) -> T + Send + 'static,
+    T: Send + 'static,
+{
+    let (sender, receiver) = tokio::sync::oneshot::channel::<T>();
+
+    let f = Box::new(|state: &mut State| {
+        // TODO: find a way to handle this error
+        if sender.send(with_state(state)).is_err() {
+            warn!("failed to send result of API call to config; receiver already dropped");
+        }
+    });
+
+    fn_sender
+        .send(f)
+        .map_err(|_| Status::internal("failed to execute request"))?;
+
+    receiver.await.map(Response::new).map_err(|err| {
+        Status::internal(format!(
+            "failed to transfer response for transport to client: {err}"
+        ))
+    })
 }
 
-impl SnowcapSocketSource {
-    /// Create a loop source that listens for connections to the provided socket_dir.
-    /// This will also set SNOWCAP_SOCKET for use in API implementations.
-    pub fn new(sender: Sender<Msg>, socket_dir: &Path) -> anyhow::Result<Self> {
-        tracing::debug!("Creating socket source for dir {socket_dir:?}");
+impl State {
+    pub fn start_grpc_server(&mut self, socket_dir: impl AsRef<Path>) -> anyhow::Result<()> {
+        let socket_dir = socket_dir.as_ref();
+        std::fs::create_dir_all(socket_dir)?;
 
-        let system = sysinfo::System::new_with_specifics(
-            RefreshKind::new().with_processes(ProcessRefreshKind::new()),
-        );
-
-        // Test if you are running multiple instances of Snowcap
-        let multiple_instances = system.processes_by_exact_name("snowcap").count() > 1;
-
-        // If you are, append a suffix to the socket name
-        let socket_name = if multiple_instances {
-            let mut suffix: u8 = 1;
-            while let Ok(true) = socket_dir
-                .join(format!("{SOCKET_NAME}_{suffix}"))
-                .try_exists()
-            {
-                suffix += 1;
-            }
-            format!("{SOCKET_NAME}_{suffix}")
-        } else {
-            SOCKET_NAME.to_string()
-        };
+        let socket_name = format!("snowcap-grpc-{}.sock", std::process::id());
 
         let socket_path = socket_dir.join(socket_name);
 
-        // If there are multiple instances, don't touch other sockets
-        if multiple_instances {
-            if let Ok(exists) = socket_path.try_exists() {
-                if exists {
-                    std::fs::remove_file(&socket_path)
-                        .context(format!("Failed to remove old socket at {socket_path:?}",))?;
-                }
-            }
-        } else {
-            // If there are, remove them all
-            for file in std::fs::read_dir(socket_dir)?
-                .filter_map(|entry| entry.ok())
-                .filter(|entry| entry.file_name().to_string_lossy().starts_with(SOCKET_NAME))
-            {
-                tracing::debug!("Removing socket at {:?}", file.path());
-                std::fs::remove_file(file.path())
-                    .context(format!("Failed to remove old socket at {:?}", file.path()))?;
-            }
+        if let Ok(true) = socket_path.try_exists() {
+            std::fs::remove_file(&socket_path)
+                .context(format!("failed to remove old socket at {socket_path:?}"))?;
         }
 
-        let listener = UnixListener::bind(&socket_path)
-            .with_context(|| format!("Failed to bind to socket at {socket_path:?}"))?;
-        tracing::info!("Bound to socket at {socket_path:?}");
+        let proto_dir = xdg::BaseDirectories::with_prefix("snowcap")?.get_data_file("protobuf");
 
-        listener
-            .set_nonblocking(true)
-            .context("Failed to set socket to nonblocking")?;
+        std::env::set_var("SNOWCAP_PROTO_DIR", proto_dir);
 
-        let socket = Generic::new(listener, Interest::READ, Mode::Level);
+        let (grpc_sender, grpc_recv) =
+            calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
 
-        std::env::set_var("SNOWCAP_SOCKET", socket_path);
-
-        Ok(Self { socket, sender })
-    }
-}
-
-pub fn send_to_client(
-    stream: &mut UnixStream,
-    msg: &OutgoingMsg,
-) -> Result<(), rmp_serde::encode::Error> {
-    // tracing::debug!("Sending {msg:?}");
-    let msg = rmp_serde::to_vec_named(msg)?;
-    let msg_len = msg.len() as u32;
-    let bytes = msg_len.to_ne_bytes();
-
-    if let Err(err) = stream.write_all(&bytes) {
-        if err.kind() == io::ErrorKind::BrokenPipe {
-            // TODO: notify user that config daemon is ded
-            return Ok(()); // TODO:
-        }
-    }
-    if let Err(err) = stream.write_all(msg.as_slice()) {
-        if err.kind() == io::ErrorKind::BrokenPipe {
-            // TODO: something
-            return Ok(()); // TODO:
-        }
-    };
-    Ok(())
-}
-
-impl EventSource for SnowcapSocketSource {
-    type Event = UnixStream;
-
-    type Metadata = ();
-
-    type Ret = ();
-
-    type Error = io::Error;
-
-    fn process_events<F>(
-        &mut self,
-        readiness: calloop::Readiness,
-        token: calloop::Token,
-        mut callback: F,
-    ) -> Result<calloop::PostAction, Self::Error>
-    where
-        F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
-    {
-        self.socket
-            .process_events(readiness, token, |_readiness, listener| {
-                while let Ok((stream, _sock_addr)) = listener.accept() {
-                    let sender = self.sender.clone();
-                    let callback_stream = stream.try_clone()?;
-                    callback(callback_stream, &mut ());
-                    std::thread::spawn(move || {
-                        if let Err(err) = handle_client(stream, sender) {
-                            tracing::error!("handle_client errored: {err}");
-                        }
-                    });
-                }
-
-                Ok(PostAction::Continue)
+        self.loop_handle
+            .insert_source(grpc_recv, |msg, _, state| match msg {
+                calloop::channel::Event::Msg(f) => f(state),
+                calloop::channel::Event::Closed => error!("grpc receiver was closed"),
             })
-    }
+            .unwrap();
 
-    fn register(
-        &mut self,
-        poll: &mut calloop::Poll,
-        token_factory: &mut calloop::TokenFactory,
-    ) -> calloop::Result<()> {
-        self.socket.register(poll, token_factory)
-    }
+        let snowcap_service = SnowcapService::new(grpc_sender.clone());
+        let layer_service = LayerService::new(grpc_sender.clone());
 
-    fn reregister(
-        &mut self,
-        poll: &mut calloop::Poll,
-        token_factory: &mut calloop::TokenFactory,
-    ) -> calloop::Result<()> {
-        self.socket.reregister(poll, token_factory)
-    }
+        let refl_service = tonic_reflection::server::Builder::configure()
+            .register_encoded_file_descriptor_set(snowcap_api_defs::FILE_DESCRIPTOR_SET)
+            .build()?;
 
-    fn unregister(&mut self, poll: &mut calloop::Poll) -> calloop::Result<()> {
-        self.socket.unregister(poll)
+        let uds = tokio::net::UnixListener::bind(&socket_path)?;
+        let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
+
+        std::env::set_var("SNOWCAP_GRPC_SOCKET", &socket_path);
+
+        let grpc_server = tonic::transport::Server::builder()
+            .add_service(refl_service)
+            .add_service(LayerServiceServer::new(layer_service));
+
+        let todo = tokio::spawn(async move {
+            if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
+                error!("gRPC server error: {err}");
+            }
+        });
+
+        Ok(())
+    }
+}
+
+type StateFnSender = calloop::channel::Sender<Box<dyn FnOnce(&mut State) + Send>>;
+
+struct SnowcapService {
+    sender: StateFnSender,
+}
+
+impl SnowcapService {
+    pub fn new(sender: StateFnSender) -> Self {
+        Self { sender }
+    }
+}
+
+struct LayerService {
+    sender: StateFnSender,
+}
+
+impl LayerService {
+    pub fn new(sender: StateFnSender) -> Self {
+        Self { sender }
+    }
+}
+
+#[tonic::async_trait]
+impl layer_service_server::LayerService for LayerService {
+    async fn new_layer(
+        &self,
+        request: Request<NewLayerRequest>,
+    ) -> Result<Response<NewLayerResponse>, Status> {
+        let request = request.into_inner();
+
+        let anchor = request.anchor();
+
+        let Some(widget_def) = request.widget_def else {
+            return Err(Status::invalid_argument("no widget def"));
+        };
+
+        let width = request.width.unwrap_or(600);
+        let height = request.height.unwrap_or(480);
+
+        let anchor = match anchor {
+            layer::v0alpha1::Anchor::Unspecified => wlr_layer::Anchor::empty(),
+            layer::v0alpha1::Anchor::Top => wlr_layer::Anchor::TOP,
+            layer::v0alpha1::Anchor::Bottom => wlr_layer::Anchor::BOTTOM,
+            layer::v0alpha1::Anchor::Left => wlr_layer::Anchor::LEFT,
+            layer::v0alpha1::Anchor::Right => wlr_layer::Anchor::RIGHT,
+            layer::v0alpha1::Anchor::TopLeft => wlr_layer::Anchor::TOP | wlr_layer::Anchor::LEFT,
+            layer::v0alpha1::Anchor::TopRight => wlr_layer::Anchor::TOP | wlr_layer::Anchor::RIGHT,
+            layer::v0alpha1::Anchor::BottomLeft => {
+                wlr_layer::Anchor::BOTTOM | wlr_layer::Anchor::LEFT
+            }
+            layer::v0alpha1::Anchor::BottomRight => {
+                wlr_layer::Anchor::BOTTOM | wlr_layer::Anchor::RIGHT
+            }
+        };
+
+        run_unary(&self.sender, move |state| {
+            let Some((f, states)) = widget_def_to_fn(widget_def) else {
+                return NewLayerResponse {}; // TODO: error
+            };
+
+            let layer = SnowcapLayer::new(
+                state,
+                width,
+                height,
+                anchor,
+                crate::widget::SnowcapWidgetProgram {
+                    widgets: f,
+                    widget_state: states,
+                },
+            );
+
+            state.layers.push(layer);
+
+            NewLayerResponse {}
+        })
+        .await
     }
 }

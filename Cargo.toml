@@ -1,22 +1,38 @@
+[workspace]
+members = [
+    "api/rust",
+    "snowcap-api-defs",
+]
+
+[workspace.dependencies]
+tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"] }
+tokio-stream = { version = "0.1.15", features = ["net"] }
+prost = "0.12.6"
+tonic = "0.11.0"
+tonic-reflection = "0.11.0"
+tonic-build = "0.11.0"
+xdg = "2.5.2"
+snowcap-api-defs = { path = "./snowcap-api-defs" }
+
 [package]
 name = "snowcap"
 version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-smithay-client-toolkit = "0.18.0"
-anyhow = { version = "1.0.75", features = ["backtrace"]}
-iced = { version = "0.10.0", features = ["wgpu", "tokio"] }
-iced_wgpu = "0.11.1"
-iced_runtime = "0.1.1"
-tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"]}
-raw-window-handle = "0.5.2"
-futures = "0.3.28"
-smithay-clipboard = "0.7.0"
-serde = { version = "1.0.188", features = ["derive"] }
-rmp = { version = "0.8.12" }
-rmp-serde = { version = "1.1.2" }
-xdg = "2.5.2"
-sysinfo = "0.29.10"
-wayland-backend = { version = "0.3.2", features = ["client_system"]}
+smithay-client-toolkit = "0.19.1"
+anyhow = { version = "1.0.86", features = ["backtrace"] }
+iced = { version = "0.12.1", features = ["wgpu", "tokio"] }
+iced_wgpu = "0.12.1"
+iced_runtime = "0.12.1"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+raw-window-handle = "0.6.2"
+xdg = { workspace = true }
+smithay-clipboard = "0.7.1"
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+prost = { workspace = true }
+tonic = { workspace = true }
+tonic-reflection = { workspace = true }
+snowcap-api-defs = { workspace = true }

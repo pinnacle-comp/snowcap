@@ -1,0 +1,12 @@
+[package]
+name = "snowcap-api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+snowcap-api-defs = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tonic = { workspace = true }
+tower = { version = "0.4.13", features = ["util"] }
+futures = "0.3.30"

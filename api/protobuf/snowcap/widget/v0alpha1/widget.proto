@@ -1,0 +1,52 @@
+syntax = "proto2";
+
+package snowcap.widget.v0alpha1;
+
+import "google/protobuf/empty.proto";
+
+message Padding {
+  optional float top = 1;
+  optional float right = 2;
+  optional float bottom = 3;
+  optional float left = 4;
+}
+
+enum Alignment {
+  ALIGNMENT_UNSPECIFIED = 0;
+  ALIGNMENT_START = 1;
+  ALIGNMENT_CENTER = 2;
+  ALIGNMENT_END = 3;
+}
+
+message Length {
+  oneof strategy {
+    google.protobuf.Empty fill = 1;
+    uint32 fill_portion = 2;
+    google.protobuf.Empty shrink = 3;
+    float fixed = 4;
+  }
+}
+
+message WidgetDef {
+  oneof widget {
+    Text text = 1;
+    Column column = 2;
+  }
+}
+
+message Text {
+  optional string text = 1;
+  optional float pixels = 2;
+  // TODO: line height
+}
+
+message Column {
+  optional float spacing = 1;
+  optional Padding padding = 2;
+  optional Alignment item_alignment = 3;
+  optional Length width = 4;
+  optional Length height = 5;
+  optional float max_width = 6;
+  optional bool clip = 7;
+  repeated WidgetDef children = 8;
+}

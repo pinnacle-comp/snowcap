@@ -1,0 +1,204 @@
+pub mod keyboard;
+
+use iced::{Color, Theme};
+use iced_runtime::Debug;
+use smithay_client_toolkit::{
+    compositor::CompositorHandler,
+    delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_seat,
+    output::{OutputHandler, OutputState},
+    reexports::client::{
+        protocol::{
+            wl_output::{self, WlOutput},
+            wl_seat::WlSeat,
+            wl_surface::WlSurface,
+        },
+        Connection, QueueHandle,
+    },
+    registry::{ProvidesRegistryState, RegistryState},
+    registry_handlers,
+    seat::{Capability, SeatHandler, SeatState},
+    shell::{
+        wlr_layer::{LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
+        WaylandSurface,
+    },
+};
+
+use crate::state::State;
+
+impl ProvidesRegistryState for State {
+    fn registry(&mut self) -> &mut RegistryState {
+        &mut self.registry_state
+    }
+
+    registry_handlers!(OutputState, SeatState);
+}
+delegate_registry!(State);
+
+impl SeatHandler for State {
+    fn seat_state(&mut self) -> &mut SeatState {
+        &mut self.seat_state
+    }
+
+    fn new_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: WlSeat) {
+        // TODO:
+    }
+
+    fn new_capability(
+        &mut self,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+        seat: WlSeat,
+        capability: Capability,
+    ) {
+        if capability == Capability::Keyboard && self.keyboard.is_none() {
+            let keyboard = self.seat_state.get_keyboard(qh, &seat, None).unwrap();
+            self.keyboard = Some(keyboard);
+        }
+    }
+
+    fn remove_capability(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        seat: WlSeat,
+        capability: Capability,
+    ) {
+        if capability == Capability::Keyboard {
+            if let Some(keyboard) = self.keyboard.take() {
+                keyboard.release();
+            }
+        }
+    }
+
+    fn remove_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: WlSeat) {
+        // TODO:
+    }
+}
+delegate_seat!(State);
+
+impl OutputHandler for State {
+    fn output_state(&mut self) -> &mut OutputState {
+        &mut self.output_state
+    }
+
+    fn new_output(&mut self, conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
+        // TODO:
+    }
+
+    fn update_output(&mut self, conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
+        // TODO:
+    }
+
+    fn output_destroyed(&mut self, conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
+        // TODO:
+    }
+}
+delegate_output!(State);
+
+impl LayerShellHandler for State {
+    fn closed(&mut self, conn: &Connection, qh: &QueueHandle<Self>, layer: &LayerSurface) {
+        // TODO:
+    }
+
+    fn configure(
+        &mut self,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+        layer: &LayerSurface,
+        _configure: LayerSurfaceConfigure,
+        _serial: u32,
+    ) {
+        let layer = self.layers.iter_mut().find(|l| &l.layer == layer);
+
+        if let Some(layer) = layer {
+            layer.widgets.update(
+                layer.viewport.logical_size(),
+                iced::mouse::Cursor::Unavailable,
+                &mut self.wgpu.renderer,
+                &Theme::Dark,
+                &iced_wgpu::core::renderer::Style {
+                    text_color: Color::WHITE,
+                },
+                &mut layer.clipboard,
+                &mut Debug::new(),
+            );
+            layer.draw(
+                &self.wgpu.device,
+                &self.wgpu.queue,
+                &mut self.wgpu.renderer,
+                qh,
+            );
+        }
+    }
+}
+delegate_layer!(State);
+
+impl CompositorHandler for State {
+    fn scale_factor_changed(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: &WlSurface,
+        new_factor: i32,
+    ) {
+        // TODO:
+    }
+
+    fn transform_changed(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: &WlSurface,
+        new_transform: wl_output::Transform,
+    ) {
+        // TODO:
+    }
+
+    fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, time: u32) {
+        let layer = self
+            .layers
+            .iter_mut()
+            .find(|layer| layer.layer.wl_surface() == surface);
+
+        if let Some(layer) = layer {
+            layer.widgets.update(
+                layer.viewport.logical_size(),
+                iced::mouse::Cursor::Unavailable,
+                &mut self.wgpu.renderer,
+                &Theme::Dark,
+                &iced_wgpu::core::renderer::Style {
+                    text_color: Color::WHITE,
+                },
+                &mut layer.clipboard,
+                &mut Debug::new(),
+            );
+            layer.draw(
+                &self.wgpu.device,
+                &self.wgpu.queue,
+                &mut self.wgpu.renderer,
+                qh,
+            );
+        }
+    }
+
+    fn surface_enter(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: &WlSurface,
+        output: &wl_output::WlOutput,
+    ) {
+        // TODO:
+    }
+
+    fn surface_leave(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: &WlSurface,
+        output: &wl_output::WlOutput,
+    ) {
+        // TODO:
+    }
+}
+delegate_compositor!(State);
