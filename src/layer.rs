@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ptr::NonNull};
+use std::{collections::HashMap, num::NonZeroU32, ptr::NonNull};
 
 use iced::Size;
 use iced_wgpu::{graphics::Viewport, wgpu::SurfaceTargetUnsafe};
@@ -28,12 +28,24 @@ pub struct SnowcapLayer {
     pub clipboard: WaylandClipboard,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum ExclusiveZone {
+    /// This layer surface wants an exclusive zone of the given size.
+    Exclusive(NonZeroU32),
+    /// This layer surface does not have an exclusive zone but wants to be placed respecting any.
+    Respect,
+    /// This layer surface does not have an exclusive zone and wants to be placed ignoring any.
+    Ignore,
+}
+
 impl SnowcapLayer {
     pub fn new(
         state: &mut State,
         width: u32,
         height: u32,
         anchor: Anchor,
+        exclusive_zone: ExclusiveZone,
+        keyboard_interactivity: wlr_layer::KeyboardInteractivity,
         program: SnowcapWidgetProgram,
     ) -> Self {
         let surface = state.compositor_state.create_surface(&state.queue_handle);
@@ -45,11 +57,14 @@ impl SnowcapLayer {
             None,
         );
 
-        layer.set_keyboard_interactivity(wlr_layer::KeyboardInteractivity::None);
-
         layer.set_size(width, height);
         layer.set_anchor(anchor);
-        // layer.set_exclusive_zone(100);
+        layer.set_keyboard_interactivity(keyboard_interactivity);
+        layer.set_exclusive_zone(match exclusive_zone {
+            ExclusiveZone::Exclusive(size) => size.get() as i32,
+            ExclusiveZone::Respect => 0,
+            ExclusiveZone::Ignore => -1,
+        });
 
         layer.commit();
 

@@ -1,5 +1,6 @@
 pub mod layer;
 pub mod snowcap;
+pub mod util;
 pub mod widget;
 
 use futures::{future::BoxFuture, Future};

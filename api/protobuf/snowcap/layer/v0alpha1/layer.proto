@@ -1,8 +1,9 @@
-syntax = "proto3";
+syntax = "proto2";
 
 package snowcap.layer.v0alpha1;
 
 import "snowcap/widget/v0alpha1/widget.proto";
+import "google/protobuf/empty.proto";
 
 enum Anchor {
   ANCHOR_UNSPECIFIED = 0;
@@ -16,11 +17,11 @@ enum Anchor {
   ANCHOR_BOTTOM_RIGHT = 8;
 }
 
-enum KeyboardExclusivity {
-  KEYBOARD_EXCLUSIVITY_UNSPECIFIED = 0;
-  KEYBOARD_EXCLUSIVITY_NONE = 1;
-  KEYBOARD_EXCLUSIVITY_ON_DEMAND = 2;
-  KEYBOARD_EXCLUSIVITY_EXCLUSIVE = 3;
+enum KeyboardInteractivity {
+  KEYBOARD_INTERACTIVITY_UNSPECIFIED = 0;
+  KEYBOARD_INTERACTIVITY_NONE = 1;
+  KEYBOARD_INTERACTIVITY_ON_DEMAND = 2;
+  KEYBOARD_INTERACTIVITY_EXCLUSIVE = 3;
 }
 
 message NewLayerRequest {
@@ -28,7 +29,8 @@ message NewLayerRequest {
   optional uint32 width = 2;
   optional uint32 height = 3;
   optional Anchor anchor = 4;
-  optional KeyboardExclusivity keyboard_exclusivity = 5;
+  optional KeyboardInteractivity keyboard_interactivity = 5;
+  optional int32 exclusive_zone = 6;
 }
 
 message NewLayerResponse {}

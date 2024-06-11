@@ -27,17 +27,23 @@ message Length {
   }
 }
 
+
 message WidgetDef {
   oneof widget {
     Text text = 1;
     Column column = 2;
+    Row row = 3;
+    Scrollable scrollable = 4;
   }
 }
 
 message Text {
   optional string text = 1;
   optional float pixels = 2;
-  // TODO: line height
+  optional Length width = 3;
+  optional Length height = 4;
+  optional Alignment horizontal_alignment = 5;
+  optional Alignment vertical_alignment = 6;
 }
 
 message Column {
@@ -49,4 +55,39 @@ message Column {
   optional float max_width = 6;
   optional bool clip = 7;
   repeated WidgetDef children = 8;
+}
+
+message Row {
+  optional float spacing = 1;
+  optional Padding padding = 2;
+  optional Alignment item_alignment = 3;
+  optional Length width = 4;
+  optional Length height = 5;
+  optional bool clip = 6;
+  repeated WidgetDef children = 7;
+}
+
+message ScrollableDirection {
+  optional ScrollableProperties vertical = 1;
+  optional ScrollableProperties horizontal = 2;
+}
+
+enum ScrollableAlignment {
+  SCROLLABLE_ALIGNMENT_UNSPECIFIED = 0;
+  SCROLLABLE_ALIGNMENT_START = 1;
+  SCROLLABLE_ALIGNMENT_END = 2;
+}
+
+message ScrollableProperties {
+  optional float width = 1;
+  optional float margin = 2;
+  optional float scroller_width = 3;
+  optional ScrollableAlignment alignment = 4;
+}
+
+message Scrollable {
+  optional Length width = 1;
+  optional Length height = 2;
+  optional ScrollableDirection direction = 3;
+  optional WidgetDef child = 4;
 }

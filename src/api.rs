@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{num::NonZeroU32, path::Path};
 
 use anyhow::Context;
 use smithay_client_toolkit::{reexports::calloop, shell::wlr_layer};
@@ -13,9 +13,9 @@ use tonic::{Request, Response, Status};
 use tracing::{error, warn};
 
 use crate::{
-    layer::SnowcapLayer,
+    layer::{ExclusiveZone, SnowcapLayer},
     state::State,
-    widget::{widget_def_to_fn, WidgetFn},
+    widget::widget_def_to_fn,
 };
 
 async fn run_unary_no_response<F>(
@@ -62,7 +62,8 @@ impl State {
         let socket_dir = socket_dir.as_ref();
         std::fs::create_dir_all(socket_dir)?;
 
-        let socket_name = format!("snowcap-grpc-{}.sock", std::process::id());
+        // let socket_name = format!("snowcap-grpc-{}.sock", std::process::id());
+        let socket_name = "snowcap-grpc.sock";
 
         let socket_path = socket_dir.join(socket_name);
 
@@ -142,6 +143,8 @@ impl layer_service_server::LayerService for LayerService {
         let request = request.into_inner();
 
         let anchor = request.anchor();
+        let exclusive_zone = request.exclusive_zone();
+        let keyboard_interactivity = request.keyboard_interactivity();
 
         let Some(widget_def) = request.widget_def else {
             return Err(Status::invalid_argument("no widget def"));
@@ -165,6 +168,24 @@ impl layer_service_server::LayerService for LayerService {
                 wlr_layer::Anchor::BOTTOM | wlr_layer::Anchor::RIGHT
             }
         };
+        let exclusive_zone = match exclusive_zone {
+            0 => ExclusiveZone::Respect,
+            x if x.is_positive() => ExclusiveZone::Exclusive(NonZeroU32::new(x as u32).unwrap()),
+            _ => ExclusiveZone::Ignore,
+        };
+
+        let keyboard_interactivity = match keyboard_interactivity {
+            layer::v0alpha1::KeyboardInteractivity::Unspecified
+            | layer::v0alpha1::KeyboardInteractivity::None => {
+                wlr_layer::KeyboardInteractivity::None
+            }
+            layer::v0alpha1::KeyboardInteractivity::OnDemand => {
+                wlr_layer::KeyboardInteractivity::OnDemand
+            }
+            layer::v0alpha1::KeyboardInteractivity::Exclusive => {
+                wlr_layer::KeyboardInteractivity::Exclusive
+            }
+        };
 
         run_unary(&self.sender, move |state| {
             let Some((f, states)) = widget_def_to_fn(widget_def) else {
@@ -176,6 +197,8 @@ impl layer_service_server::LayerService for LayerService {
                 width,
                 height,
                 anchor,
+                exclusive_zone,
+                keyboard_interactivity,
                 crate::widget::SnowcapWidgetProgram {
                     widgets: f,
                     widget_state: states,

@@ -3,6 +3,7 @@ mod clipboard;
 mod handlers;
 mod layer;
 mod state;
+mod util;
 mod wgpu;
 mod widget;
 
