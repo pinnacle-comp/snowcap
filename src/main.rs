@@ -10,7 +10,6 @@ mod widget;
 use std::future::Future;
 
 use anyhow::Context;
-use layer::SnowcapLayer;
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
@@ -21,7 +20,7 @@ use smithay_client_toolkit::{
     },
     registry::RegistryState,
     seat::SeatState,
-    shell::wlr_layer::{Anchor, LayerShell},
+    shell::wlr_layer::LayerShell,
 };
 use state::State;
 use tracing_subscriber::EnvFilter;
@@ -71,11 +70,12 @@ async fn main() -> anyhow::Result<()> {
         keyboard_focus: None,
         keyboard_modifiers: smithay_client_toolkit::seat::keyboard::Modifiers::default(),
         keyboard: None,
+        pointer: None,
     };
 
     state.start_grpc_server("/tmp").unwrap();
 
-    event_loop.run(None, &mut state, |state| {}).unwrap();
+    event_loop.run(None, &mut state, |_state| {}).unwrap();
 
     Ok(())
 }

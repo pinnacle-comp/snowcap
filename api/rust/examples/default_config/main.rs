@@ -26,8 +26,9 @@ async fn main() {
             .into(),
     ]));
 
-    let scrollable = WidgetDef::Scrollable(Box::new(Scrollable::new(Text::new(
-        "a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
+    let scrollable = WidgetDef::Scrollable(Box::new(
+        Scrollable::new(Text::new(
+            "a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
             a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
             a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
             a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
@@ -71,7 +72,9 @@ async fn main() {
             a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
             a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
             ",
-    ))));
+        ))
+        .with_width(Length::Fill),
+    ));
 
     layer.new_widget(
         scrollable,

@@ -26,6 +26,8 @@ pub struct SnowcapLayer {
 
     pub widgets: iced_runtime::program::State<SnowcapWidgetProgram>,
     pub clipboard: WaylandClipboard,
+
+    pub pointer_location: Option<(f64, f64)>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -118,6 +120,7 @@ impl SnowcapLayer {
             viewport: Viewport::with_physical_size(Size::new(width, height), 1.0),
             widgets,
             clipboard,
+            pointer_location: None,
         }
     }
 

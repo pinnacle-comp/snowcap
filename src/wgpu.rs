@@ -49,7 +49,7 @@ pub fn setup_wgpu() -> anyhow::Result<Wgpu> {
         wgpu::TextureFormat::Bgra8UnormSrgb,
     );
 
-    let renderer = iced_wgpu::Renderer::new(backend, Default::default(), iced::Pixels(12.0));
+    let renderer = iced_wgpu::Renderer::new(backend, Default::default(), iced::Pixels(16.0));
 
     Ok(Wgpu {
         instance: Arc::new(instance),

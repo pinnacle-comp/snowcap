@@ -1,4 +1,5 @@
 pub mod keyboard;
+pub mod pointer;
 
 use iced::{Color, Theme};
 use iced_runtime::Debug;
@@ -54,18 +55,29 @@ impl SeatHandler for State {
             let keyboard = self.seat_state.get_keyboard(qh, &seat, None).unwrap();
             self.keyboard = Some(keyboard);
         }
+
+        if capability == Capability::Pointer && self.pointer.is_none() {
+            let pointer = self.seat_state.get_pointer(qh, &seat).unwrap();
+            self.pointer = Some(pointer);
+        }
     }
 
     fn remove_capability(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        seat: WlSeat,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _seat: WlSeat,
         capability: Capability,
     ) {
         if capability == Capability::Keyboard {
             if let Some(keyboard) = self.keyboard.take() {
                 keyboard.release();
+            }
+        }
+
+        if capability == Capability::Pointer {
+            if let Some(pointer) = self.pointer.take() {
+                pointer.release();
             }
         }
     }
@@ -111,9 +123,16 @@ impl LayerShellHandler for State {
         let layer = self.layers.iter_mut().find(|l| &l.layer == layer);
 
         if let Some(layer) = layer {
+            let cursor = match layer.pointer_location {
+                Some((x, y)) => iced::mouse::Cursor::Available(iced::Point {
+                    x: x as f32,
+                    y: y as f32,
+                }),
+                None => iced::mouse::Cursor::Unavailable,
+            };
             layer.widgets.update(
                 layer.viewport.logical_size(),
-                iced::mouse::Cursor::Unavailable,
+                cursor,
                 &mut self.wgpu.renderer,
                 &Theme::Dark,
                 &iced_wgpu::core::renderer::Style {
@@ -161,9 +180,16 @@ impl CompositorHandler for State {
             .find(|layer| layer.layer.wl_surface() == surface);
 
         if let Some(layer) = layer {
+            let cursor = match layer.pointer_location {
+                Some((x, y)) => iced::mouse::Cursor::Available(iced::Point {
+                    x: x as f32,
+                    y: y as f32,
+                }),
+                None => iced::mouse::Cursor::Unavailable,
+            };
             layer.widgets.update(
                 layer.viewport.logical_size(),
-                iced::mouse::Cursor::Unavailable,
+                cursor,
                 &mut self.wgpu.renderer,
                 &Theme::Dark,
                 &iced_wgpu::core::renderer::Style {

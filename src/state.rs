@@ -3,7 +3,10 @@ use smithay_client_toolkit::{
     output::OutputState,
     reexports::{
         calloop::LoopHandle,
-        client::{protocol::wl_keyboard::WlKeyboard, Connection, QueueHandle},
+        client::{
+            protocol::{wl_keyboard::WlKeyboard, wl_pointer::WlPointer},
+            Connection, QueueHandle,
+        },
     },
     registry::RegistryState,
     seat::{keyboard::Modifiers, SeatState},
@@ -32,4 +35,6 @@ pub struct State {
     pub keyboard_focus: Option<KeyboardFocus>,
     pub keyboard_modifiers: Modifiers,
     pub keyboard: Option<WlKeyboard>, // TODO: multiple
+
+    pub pointer: Option<WlPointer>, // TODO: multiple
 }
