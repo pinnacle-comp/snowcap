@@ -3,6 +3,7 @@ mod clipboard;
 mod handlers;
 mod input;
 mod layer;
+mod runtime;
 mod state;
 mod util;
 mod wgpu;
@@ -11,11 +12,13 @@ mod widget;
 use std::future::Future;
 
 use anyhow::Context;
+use iced_futures::Runtime;
+use runtime::CurrentTokioExecutor;
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
     reexports::{
-        calloop::EventLoop,
+        calloop::{self, EventLoop},
         calloop_wayland_source::WaylandSource,
         client::{globals::registry_queue_init, Connection},
     },
@@ -26,6 +29,7 @@ use smithay_client_toolkit::{
 use state::State;
 use tracing_subscriber::EnvFilter;
 use wgpu::setup_wgpu;
+use widget::SnowcapMessage;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

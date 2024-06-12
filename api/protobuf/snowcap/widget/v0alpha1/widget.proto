@@ -111,4 +111,12 @@ message Container {
   optional Alignment vertical_alignment = 7;
   optional bool clip = 8;
   optional WidgetDef child = 9;
+
+  // styling
+
+  optional Color text_color = 10;
+  optional Color background_color = 11; // TODO: gradient
+  optional float border_radius = 12;
+  optional float border_thickness = 13;
+  optional Color border_color = 14;
 }

@@ -140,10 +140,10 @@ impl Text {
 }
 
 pub struct Color {
-    red: f32,
-    green: f32,
-    blue: f32,
-    alpha: f32,
+    pub red: f32,
+    pub green: f32,
+    pub blue: f32,
+    pub alpha: f32,
 }
 
 impl IntoApi for Color {
@@ -561,6 +561,12 @@ pub struct Container {
     pub vertical_alignment: Option<Alignment>,
     pub clip: Option<bool>,
     pub child: WidgetDef,
+
+    pub text_color: Option<Color>,
+    pub background_color: Option<Color>,
+    pub border_radius: Option<f32>,
+    pub border_thickness: Option<f32>,
+    pub border_color: Option<Color>,
 }
 
 impl Container {
@@ -575,6 +581,11 @@ impl Container {
             horizontal_alignment: None,
             vertical_alignment: None,
             clip: None,
+            text_color: None,
+            background_color: None,
+            border_radius: None,
+            border_thickness: None,
+            border_color: None,
         }
     }
 
@@ -633,6 +644,41 @@ impl Container {
             ..self
         }
     }
+
+    pub fn with_text_color(self, color: Color) -> Self {
+        Self {
+            text_color: Some(color),
+            ..self
+        }
+    }
+
+    pub fn with_background_color(self, color: Color) -> Self {
+        Self {
+            background_color: Some(color),
+            ..self
+        }
+    }
+
+    pub fn with_border_radius(self, radius: f32) -> Self {
+        Self {
+            border_radius: Some(radius),
+            ..self
+        }
+    }
+
+    pub fn with_border_thickness(self, thickness: f32) -> Self {
+        Self {
+            border_thickness: Some(thickness),
+            ..self
+        }
+    }
+
+    pub fn with_border_color(self, color: Color) -> Self {
+        Self {
+            border_color: Some(color),
+            ..self
+        }
+    }
 }
 
 impl IntoApi for Container {
@@ -649,6 +695,11 @@ impl IntoApi for Container {
             vertical_alignment: self.vertical_alignment.map(|it| it.into_api() as i32),
             clip: self.clip,
             child: Some(Box::new(self.child.into_api())),
+            text_color: self.text_color.map(IntoApi::into_api),
+            background_color: self.background_color.map(IntoApi::into_api),
+            border_radius: self.border_radius,
+            border_thickness: self.border_thickness,
+            border_color: self.border_color.map(IntoApi::into_api),
         }
     }
 }

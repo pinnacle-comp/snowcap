@@ -21,20 +21,29 @@ pub struct SnowcapWidgetProgram {
 pub type WidgetFn = Box<
     dyn for<'a> Fn(
         &'a HashMap<u32, Box<dyn Any + Send>>,
-    ) -> Element<'a, UpdateMessage, iced::Theme, iced_wgpu::Renderer>,
+    ) -> Element<'a, SnowcapMessage, iced::Theme, iced_wgpu::Renderer>,
 >;
 
-pub type UpdateMessage = (u32, Box<dyn Any + Send>);
+#[derive(Debug)]
+pub enum SnowcapMessage {
+    Close,
+    Update(u32, Box<dyn Any + Send>),
+}
 
 impl Program for SnowcapWidgetProgram {
     type Renderer = iced_wgpu::Renderer;
 
     type Theme = iced::Theme;
 
-    type Message = UpdateMessage;
+    type Message = SnowcapMessage;
 
-    fn update(&mut self, (id, data): Self::Message) -> Command<Self::Message> {
-        self.widget_state.insert(id, data);
+    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+        match message {
+            SnowcapMessage::Close => (),
+            SnowcapMessage::Update(id, data) => {
+                self.widget_state.insert(id, data);
+            }
+        }
         Command::none()
     }
 
@@ -113,6 +122,14 @@ fn widget_def_to_fn_inner(
                         text = text.vertical_alignment(iced::alignment::Vertical::Bottom)
                     }
                 }
+
+                text = text.font(iced::Font {
+                    // family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
+                    family: iced::font::Family::Monospace,
+                    weight: iced::font::Weight::Semibold,
+                    stretch: iced::font::Stretch::Normal,
+                    style: iced::font::Style::Normal,
+                });
 
                 text.into()
             });
@@ -298,6 +315,12 @@ fn widget_def_to_fn_inner(
                 vertical_alignment: _,
                 clip,
                 child,
+
+                text_color,
+                background_color,
+                border_radius,
+                border_thickness,
+                border_color,
             } = *container_def;
 
             let child_widget_fn = child.and_then(|def| {
@@ -344,12 +367,51 @@ fn widget_def_to_fn_inner(
                     widget::v0alpha1::Alignment::End => iced::alignment::Vertical::Bottom,
                 });
 
-                let style: fn(&iced::Theme) -> _ = |theme| {
-                    iced::widget::container::Appearance::default().with_border([0.4, 0.0, 0.4], 8.0)
+                let text_color_clone = text_color.clone();
+                let background_color_clone = background_color.clone();
+                let border_color_clone = border_color.clone();
+
+                let style = move |theme: &iced::Theme| {
+                    use iced::widget::container::Appearance;
+
+                    let palette = theme.extended_palette();
+
+                    let mut appearance = Appearance {
+                        text_color: None,
+                        background: Some(palette.background.weak.color.into()),
+                        border: iced::Border {
+                            color: palette.background.base.color,
+                            width: 0.0,
+                            radius: 2.0.into(),
+                        },
+                        shadow: iced::Shadow::default(),
+                    };
+
+                    if let Some(text_color) = text_color_clone.clone() {
+                        appearance.text_color = Some(iced::Color::from_api(text_color));
+                    }
+
+                    if let Some(background_color) = background_color_clone.clone() {
+                        appearance.background =
+                            Some(iced::Color::from_api(background_color).into());
+                    }
+
+                    if let Some(border_color) = border_color_clone.clone() {
+                        appearance.border.color = iced::Color::from_api(border_color);
+                    }
+
+                    if let Some(border_radius) = border_radius {
+                        appearance.border.radius = border_radius.into();
+                    }
+
+                    if let Some(border_thickness) = border_thickness {
+                        appearance.border.width = border_thickness;
+                    }
+
+                    appearance
                 };
 
-                // container = container.style(iced::theme::Container::Custom(Box::new(style)));
-                container = container.style(iced::theme::Container::Box);
+                container = container.style(iced::theme::Container::Custom(Box::new(style)));
 
                 container.into()
             });

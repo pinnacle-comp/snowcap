@@ -2696,7 +2696,9 @@ name = "snowcap"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "futures",
  "iced",
+ "iced_futures",
  "iced_runtime",
  "iced_wgpu",
  "prost",

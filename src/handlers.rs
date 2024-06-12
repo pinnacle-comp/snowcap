@@ -1,8 +1,6 @@
 pub mod keyboard;
 pub mod pointer;
 
-use iced::{Color, Theme};
-use iced_runtime::Debug;
 use smithay_client_toolkit::{
     compositor::CompositorHandler,
     delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_seat,
@@ -123,25 +121,7 @@ impl LayerShellHandler for State {
         let layer = self.layers.iter_mut().find(|l| &l.layer == layer);
 
         if let Some(layer) = layer {
-            let cursor = match layer.pointer_location {
-                Some((x, y)) => iced::mouse::Cursor::Available(iced::Point {
-                    x: x as f32,
-                    y: y as f32,
-                }),
-                None => iced::mouse::Cursor::Unavailable,
-            };
-            layer.widgets.update(
-                layer.viewport.logical_size(),
-                cursor,
-                &mut self.wgpu.renderer,
-                &Theme::CatppuccinFrappe,
-                &iced_wgpu::core::renderer::Style {
-                    text_color: Color::WHITE,
-                },
-                &mut layer.clipboard,
-                &mut Debug::new(),
-            );
-            layer.draw(
+            layer.update_and_draw(
                 &self.wgpu.device,
                 &self.wgpu.queue,
                 &mut self.wgpu.renderer,
@@ -180,25 +160,7 @@ impl CompositorHandler for State {
             .find(|layer| layer.layer.wl_surface() == surface);
 
         if let Some(layer) = layer {
-            let cursor = match layer.pointer_location {
-                Some((x, y)) => iced::mouse::Cursor::Available(iced::Point {
-                    x: x as f32,
-                    y: y as f32,
-                }),
-                None => iced::mouse::Cursor::Unavailable,
-            };
-            layer.widgets.update(
-                layer.viewport.logical_size(),
-                cursor,
-                &mut self.wgpu.renderer,
-                &Theme::CatppuccinFrappe,
-                &iced_wgpu::core::renderer::Style {
-                    text_color: Color::WHITE,
-                },
-                &mut layer.clipboard,
-                &mut Debug::new(),
-            );
-            layer.draw(
+            layer.update_and_draw(
                 &self.wgpu.device,
                 &self.wgpu.queue,
                 &mut self.wgpu.renderer,

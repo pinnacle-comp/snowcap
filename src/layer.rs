@@ -1,19 +1,29 @@
-use std::{collections::HashMap, num::NonZeroU32, ptr::NonNull};
+use std::{num::NonZeroU32, ptr::NonNull};
 
-use iced::Size;
+use iced::{Color, Size, Theme};
+use iced_futures::Runtime;
+use iced_runtime::Debug;
 use iced_wgpu::{graphics::Viewport, wgpu::SurfaceTargetUnsafe};
 use raw_window_handle::{
     RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle,
 };
 use smithay_client_toolkit::{
-    reexports::client::{Proxy, QueueHandle},
+    reexports::{
+        calloop,
+        client::{Proxy, QueueHandle},
+    },
     shell::{
         wlr_layer::{self, Anchor, LayerSurface},
         WaylandSurface,
     },
 };
 
-use crate::{clipboard::WaylandClipboard, state::State, widget::SnowcapWidgetProgram};
+use crate::{
+    clipboard::WaylandClipboard,
+    runtime::{CalloopSenderSink, CurrentTokioExecutor},
+    state::State,
+    widget::{SnowcapMessage, SnowcapWidgetProgram},
+};
 
 pub struct SnowcapLayer {
     // SAFETY: Drop order: surface needs to be dropped before the layer
@@ -28,6 +38,8 @@ pub struct SnowcapLayer {
     pub clipboard: WaylandClipboard,
 
     pub pointer_location: Option<(f64, f64)>,
+
+    pub runtime: Runtime<CurrentTokioExecutor, CalloopSenderSink<SnowcapMessage>, SnowcapMessage>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -112,6 +124,48 @@ impl SnowcapLayer {
         let clipboard =
             unsafe { WaylandClipboard::new(state.conn.backend().display_ptr() as *mut _) };
 
+        let (sender, recv) = calloop::channel::channel::<SnowcapMessage>();
+        let mut runtime = Runtime::new(CurrentTokioExecutor, CalloopSenderSink::new(sender));
+
+        let layer_clone = layer.clone();
+        state
+            .loop_handle
+            .insert_source(recv, move |event, _, state| match event {
+                calloop::channel::Event::Msg(message) => match message {
+                    SnowcapMessage::Close => {
+                        state
+                            .layers
+                            .retain(|sn_layer| sn_layer.layer != layer_clone);
+                    }
+                    msg => {
+                        if let Some(layer) = state
+                            .layers
+                            .iter_mut()
+                            .find(|sn_layer| sn_layer.layer == layer_clone)
+                        {
+                            layer.widgets.queue_message(msg);
+                        }
+                    }
+                },
+                calloop::channel::Event::Closed => (),
+            })
+            .unwrap();
+
+        runtime.track(
+            iced::keyboard::on_key_press(|key, mods| {
+                if matches!(
+                    key,
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
+                ) {
+                    tracing::info!("GOT CLOSE");
+                    Some(SnowcapMessage::Close)
+                } else {
+                    None
+                }
+            })
+            .into_recipes(),
+        );
+
         Self {
             surface: wgpu_surface,
             layer,
@@ -121,6 +175,7 @@ impl SnowcapLayer {
             widgets,
             clipboard,
             pointer_location: None,
+            runtime,
         }
     }
 
@@ -148,7 +203,7 @@ impl SnowcapLayer {
                     device,
                     queue,
                     &mut encoder,
-                    Some(iced::Color::new(0.3, 0.3, 0.3, 1.0)),
+                    Some(iced::Color::TRANSPARENT),
                     iced_wgpu::wgpu::TextureFormat::Bgra8UnormSrgb,
                     &view,
                     primitives,
@@ -164,11 +219,46 @@ impl SnowcapLayer {
             .wl_surface()
             .damage_buffer(0, 0, self.width as i32, self.height as i32);
 
+        // FIXME: draws every frame continuously; only request a frame if
+        // !self.widgets.is_queue_empty()
         self.layer
             .wl_surface()
             .frame(qh, self.layer.wl_surface().clone());
 
         // Does a commit
         frame.present();
+    }
+
+    pub fn update_and_draw(
+        &mut self,
+        device: &iced_wgpu::wgpu::Device,
+        queue: &iced_wgpu::wgpu::Queue,
+        renderer: &mut iced_wgpu::Renderer,
+        qh: &QueueHandle<State>,
+    ) {
+        let cursor = match self.pointer_location {
+            Some((x, y)) => iced::mouse::Cursor::Available(iced::Point {
+                x: x as f32,
+                y: y as f32,
+            }),
+            None => iced::mouse::Cursor::Unavailable,
+        };
+        let (events, command) = self.widgets.update(
+            self.viewport.logical_size(),
+            cursor,
+            renderer,
+            &Theme::CatppuccinFrappe,
+            &iced_wgpu::core::renderer::Style {
+                text_color: Color::WHITE,
+            },
+            &mut self.clipboard,
+            &mut Debug::new(),
+        );
+
+        for event in events {
+            self.runtime.broadcast(event, iced::event::Status::Ignored);
+        }
+
+        self.draw(device, queue, renderer, qh);
     }
 }
