@@ -89,3 +89,29 @@ impl FromApi for iced::widget::scrollable::Direction {
         }
     }
 }
+
+impl FromApi for iced::Padding {
+    type ApiType = widget::v0alpha1::Padding;
+
+    fn from_api(api_type: Self::ApiType) -> Self {
+        iced::Padding {
+            top: api_type.top(),
+            right: api_type.right(),
+            bottom: api_type.bottom(),
+            left: api_type.left(),
+        }
+    }
+}
+
+impl FromApi for iced::Color {
+    type ApiType = widget::v0alpha1::Color;
+
+    fn from_api(api_type: Self::ApiType) -> Self {
+        iced::Color {
+            r: api_type.red().clamp(0.0, 1.0),
+            g: api_type.green().clamp(0.0, 1.0),
+            b: api_type.blue().clamp(0.0, 1.0),
+            a: api_type.alpha.unwrap_or(1.0).clamp(0.0, 1.0),
+        }
+    }
+}

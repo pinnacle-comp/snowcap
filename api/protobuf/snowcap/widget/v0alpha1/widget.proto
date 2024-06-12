@@ -27,6 +27,13 @@ message Length {
   }
 }
 
+message Color {
+  optional float red = 1;
+  optional float green = 2;
+  optional float blue = 3;
+  optional float alpha = 4;
+}
+
 
 message WidgetDef {
   oneof widget {
@@ -34,6 +41,7 @@ message WidgetDef {
     Column column = 2;
     Row row = 3;
     Scrollable scrollable = 4;
+    Container container = 5;
   }
 }
 
@@ -44,6 +52,7 @@ message Text {
   optional Length height = 4;
   optional Alignment horizontal_alignment = 5;
   optional Alignment vertical_alignment = 6;
+  optional Color color = 7;
 }
 
 message Column {
@@ -90,4 +99,16 @@ message Scrollable {
   optional Length height = 2;
   optional ScrollableDirection direction = 3;
   optional WidgetDef child = 4;
+}
+
+message Container {
+  optional Padding padding = 1;
+  optional Length width = 2;
+  optional Length height = 3;
+  optional float max_width = 4;
+  optional float max_height = 5;
+  optional Alignment horizontal_alignment = 6;
+  optional Alignment vertical_alignment = 7;
+  optional bool clip = 8;
+  optional WidgetDef child = 9;
 }

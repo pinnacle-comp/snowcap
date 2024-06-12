@@ -91,13 +91,13 @@ impl SnowcapLayer {
         let capabilities = wgpu_surface.get_capabilities(&state.wgpu.adapter);
         let surface_config = iced_wgpu::wgpu::SurfaceConfiguration {
             usage: iced_wgpu::wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: capabilities.formats[0],
+            format: iced_wgpu::wgpu::TextureFormat::Bgra8UnormSrgb,
             width,
             height,
             present_mode: iced_wgpu::wgpu::PresentMode::Mailbox,
             desired_maximum_frame_latency: 1,
             alpha_mode: iced_wgpu::wgpu::CompositeAlphaMode::Auto,
-            view_formats: vec![capabilities.formats[0]],
+            view_formats: vec![iced_wgpu::wgpu::TextureFormat::Bgra8UnormSrgb],
         };
 
         wgpu_surface.configure(&state.wgpu.device, &surface_config);

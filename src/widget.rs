@@ -1,7 +1,7 @@
 use std::{any::Any, collections::HashMap};
 
 use iced::{
-    widget::{Column, Row, Scrollable},
+    widget::{Column, Container, Row, Scrollable},
     Command,
 };
 use iced_runtime::Program;
@@ -70,6 +70,7 @@ fn widget_def_to_fn_inner(
                 height,
                 horizontal_alignment: _,
                 vertical_alignment: _,
+                color,
             } = text_def;
 
             let f: WidgetFn = Box::new(move |_states| {
@@ -82,6 +83,9 @@ fn widget_def_to_fn_inner(
                 }
                 if let Some(height) = height.clone() {
                     text = text.height(iced::Length::from_api(height));
+                }
+                if let Some(color) = color.clone() {
+                    text = text.style(iced::theme::Text::Color(iced::Color::from_api(color)));
                 }
 
                 match horizontal_alignment {
@@ -152,19 +156,8 @@ fn widget_def_to_fn_inner(
                     column = column.clip(clip);
                 }
 
-                if let Some(widget::v0alpha1::Padding {
-                    top,
-                    right,
-                    bottom,
-                    left,
-                }) = padding
-                {
-                    column = column.padding([
-                        top.unwrap_or_default(),
-                        right.unwrap_or_default(),
-                        bottom.unwrap_or_default(),
-                        left.unwrap_or_default(),
-                    ]);
+                if let Some(padding) = padding.clone() {
+                    column = column.padding(iced::Padding::from_api(padding));
                 }
 
                 if let Some(alignment) = item_alignment {
@@ -287,6 +280,78 @@ fn widget_def_to_fn_inner(
                 }
 
                 scrollable.into()
+            });
+
+            Some(f)
+        }
+        widget_def::Widget::Container(container_def) => {
+            let horizontal_alignment = container_def.horizontal_alignment();
+            let vertical_alignment = container_def.vertical_alignment();
+
+            let widget::v0alpha1::Container {
+                padding,
+                width,
+                height,
+                max_width,
+                max_height,
+                horizontal_alignment: _,
+                vertical_alignment: _,
+                clip,
+                child,
+            } = *container_def;
+
+            let child_widget_fn = child.and_then(|def| {
+                *current_id += 1;
+                widget_def_to_fn_inner(*def, current_id, states)
+            });
+
+            let f: WidgetFn = Box::new(move |states| {
+                let mut container = Container::new(
+                    child_widget_fn
+                        .as_ref()
+                        .map(|child| child(states))
+                        .unwrap_or_else(|| iced::widget::Text::new("NULL").into()),
+                );
+
+                if let Some(width) = width.clone() {
+                    container = container.width(iced::Length::from_api(width));
+                }
+                if let Some(height) = height.clone() {
+                    container = container.height(iced::Length::from_api(height));
+                }
+                if let Some(max_width) = max_width {
+                    container = container.max_width(max_width);
+                }
+                if let Some(max_height) = max_height {
+                    container = container.max_height(max_height);
+                }
+                if let Some(clip) = clip {
+                    container = container.clip(clip);
+                }
+                if let Some(padding) = padding.clone() {
+                    container = container.padding(iced::Padding::from_api(padding));
+                }
+                container = container.align_x(match horizontal_alignment {
+                    widget::v0alpha1::Alignment::Unspecified => iced::alignment::Horizontal::Left,
+                    widget::v0alpha1::Alignment::Start => iced::alignment::Horizontal::Left,
+                    widget::v0alpha1::Alignment::Center => iced::alignment::Horizontal::Center,
+                    widget::v0alpha1::Alignment::End => iced::alignment::Horizontal::Right,
+                });
+                container = container.align_y(match vertical_alignment {
+                    widget::v0alpha1::Alignment::Unspecified => iced::alignment::Vertical::Top,
+                    widget::v0alpha1::Alignment::Start => iced::alignment::Vertical::Top,
+                    widget::v0alpha1::Alignment::Center => iced::alignment::Vertical::Center,
+                    widget::v0alpha1::Alignment::End => iced::alignment::Vertical::Bottom,
+                });
+
+                let style: fn(&iced::Theme) -> _ = |theme| {
+                    iced::widget::container::Appearance::default().with_border([0.4, 0.0, 0.4], 8.0)
+                };
+
+                // container = container.style(iced::theme::Container::Custom(Box::new(style)));
+                container = container.style(iced::theme::Container::Box);
+
+                container.into()
             });
 
             Some(f)

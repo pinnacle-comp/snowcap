@@ -66,16 +66,19 @@ impl PointerHandler for State {
                     vertical,
                     source,
                 } => {
+                    // Values are negated because they're backwards otherwise
                     let delta = match source {
                         Some(AxisSource::Wheel | AxisSource::WheelTilt) => ScrollDelta::Lines {
-                            x: horizontal.discrete as f32,
-                            y: vertical.discrete as f32,
+                            x: -horizontal.discrete as f32,
+                            y: -vertical.discrete as f32,
                         },
                         Some(AxisSource::Finger | AxisSource::Continuous) => ScrollDelta::Pixels {
-                            x: horizontal.absolute as f32,
-                            y: vertical.absolute as f32,
+                            x: -horizontal.absolute as f32,
+                            y: -vertical.absolute as f32,
                         },
-                        _ => continue, // TODO: continue here or default to lines?
+                        // TODO: continue here or default to lines? prolly should
+                        // look at the protocol docs
+                        _ => continue,
                     };
                     iced::Event::Mouse(iced::mouse::Event::WheelScrolled { delta })
                 }

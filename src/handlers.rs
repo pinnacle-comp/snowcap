@@ -134,7 +134,7 @@ impl LayerShellHandler for State {
                 layer.viewport.logical_size(),
                 cursor,
                 &mut self.wgpu.renderer,
-                &Theme::Dark,
+                &Theme::CatppuccinFrappe,
                 &iced_wgpu::core::renderer::Style {
                     text_color: Color::WHITE,
                 },
@@ -191,7 +191,7 @@ impl CompositorHandler for State {
                 layer.viewport.logical_size(),
                 cursor,
                 &mut self.wgpu.renderer,
-                &Theme::Dark,
+                &Theme::CatppuccinFrappe,
                 &iced_wgpu::core::renderer::Style {
                     text_color: Color::WHITE,
                 },

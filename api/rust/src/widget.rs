@@ -4,8 +4,10 @@ use crate::util::IntoApi;
 
 pub enum WidgetDef {
     Text(Text),
+    Column(Column),
     Row(Row),
     Scrollable(Box<Scrollable>),
+    Container(Box<Container>),
 }
 
 impl IntoApi for WidgetDef {
@@ -16,11 +18,17 @@ impl IntoApi for WidgetDef {
                 WidgetDef::Text(text) => {
                     widget::v0alpha1::widget_def::Widget::Text(text.into_api())
                 }
+                WidgetDef::Column(column) => {
+                    widget::v0alpha1::widget_def::Widget::Column(column.into_api())
+                }
                 WidgetDef::Row(row) => widget::v0alpha1::widget_def::Widget::Row(row.into_api()),
                 WidgetDef::Scrollable(scrollable) => {
                     widget::v0alpha1::widget_def::Widget::Scrollable(Box::new(
                         scrollable.into_api(),
                     ))
+                }
+                WidgetDef::Container(container) => {
+                    widget::v0alpha1::widget_def::Widget::Container(Box::new(container.into_api()))
                 }
             }),
         }
@@ -33,6 +41,42 @@ impl From<Text> for WidgetDef {
     }
 }
 
+impl From<Column> for WidgetDef {
+    fn from(value: Column) -> Self {
+        Self::Column(value)
+    }
+}
+
+impl From<Row> for WidgetDef {
+    fn from(value: Row) -> Self {
+        Self::Row(value)
+    }
+}
+
+impl From<Scrollable> for WidgetDef {
+    fn from(value: Scrollable) -> Self {
+        Self::Scrollable(Box::new(value))
+    }
+}
+
+impl From<Box<Scrollable>> for WidgetDef {
+    fn from(value: Box<Scrollable>) -> Self {
+        Self::Scrollable(value)
+    }
+}
+
+impl From<Container> for WidgetDef {
+    fn from(value: Container) -> Self {
+        Self::Container(Box::new(value))
+    }
+}
+
+impl From<Box<Container>> for WidgetDef {
+    fn from(value: Box<Container>) -> Self {
+        Self::Container(value)
+    }
+}
+
 #[derive(Default)]
 pub struct Text {
     pub text: String,
@@ -41,6 +85,7 @@ pub struct Text {
     pub height: Option<Length>,
     pub horizontal_alignment: Option<Alignment>,
     pub vertical_alignment: Option<Alignment>,
+    pub color: Option<Color>,
 }
 
 impl Text {
@@ -85,6 +130,33 @@ impl Text {
             ..self
         }
     }
+
+    pub fn with_color(self, color: Color) -> Self {
+        Self {
+            color: Some(color),
+            ..self
+        }
+    }
+}
+
+pub struct Color {
+    red: f32,
+    green: f32,
+    blue: f32,
+    alpha: f32,
+}
+
+impl IntoApi for Color {
+    type ApiType = widget::v0alpha1::Color;
+
+    fn into_api(self) -> Self::ApiType {
+        widget::v0alpha1::Color {
+            red: Some(self.red),
+            green: Some(self.blue),
+            blue: Some(self.green),
+            alpha: Some(self.alpha),
+        }
+    }
 }
 
 impl IntoApi for Text {
@@ -98,6 +170,7 @@ impl IntoApi for Text {
             height: self.height.map(IntoApi::into_api),
             horizontal_alignment: None,
             vertical_alignment: None,
+            color: self.color.map(IntoApi::into_api),
         };
         if let Some(horizontal_alignment) = self.horizontal_alignment {
             text.set_horizontal_alignment(horizontal_alignment.into_api());
@@ -106,6 +179,103 @@ impl IntoApi for Text {
             text.set_vertical_alignment(vertical_alignment.into_api());
         }
         text
+    }
+}
+
+#[derive(Default)]
+pub struct Column {
+    pub spacing: Option<f32>,
+    pub padding: Option<Padding>,
+    pub item_alignment: Option<Alignment>,
+    pub width: Option<Length>,
+    pub height: Option<Length>,
+    pub max_width: Option<f32>,
+    pub clip: Option<bool>,
+    pub children: Vec<WidgetDef>,
+}
+
+impl Column {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn new_with_children(children: impl IntoIterator<Item = WidgetDef>) -> Self {
+        Self {
+            children: children.into_iter().collect(),
+            ..Default::default()
+        }
+    }
+
+    pub fn with_spacing(self, spacing: f32) -> Self {
+        Self {
+            spacing: Some(spacing),
+            ..self
+        }
+    }
+
+    pub fn with_item_alignment(self, item_alignment: Alignment) -> Self {
+        Self {
+            item_alignment: Some(item_alignment),
+            ..self
+        }
+    }
+
+    pub fn with_padding(self, padding: Padding) -> Self {
+        Self {
+            padding: Some(padding),
+            ..self
+        }
+    }
+
+    pub fn with_width(self, width: Length) -> Self {
+        Self {
+            width: Some(width),
+            ..self
+        }
+    }
+
+    pub fn with_height(self, height: Length) -> Self {
+        Self {
+            height: Some(height),
+            ..self
+        }
+    }
+
+    pub fn with_max_width(self, max_width: f32) -> Self {
+        Self {
+            max_width: Some(max_width),
+            ..self
+        }
+    }
+
+    pub fn with_clip(self, clip: bool) -> Self {
+        Self {
+            clip: Some(clip),
+            ..self
+        }
+    }
+
+    pub fn push(self, child: impl Into<WidgetDef>) -> Self {
+        let mut children = self.children;
+        children.push(child.into());
+        Self { children, ..self }
+    }
+}
+
+impl IntoApi for Column {
+    type ApiType = widget::v0alpha1::Column;
+
+    fn into_api(self) -> Self::ApiType {
+        widget::v0alpha1::Column {
+            spacing: self.spacing,
+            padding: self.padding.map(IntoApi::into_api),
+            item_alignment: self.item_alignment.map(|it| it.into_api() as i32),
+            width: self.width.map(IntoApi::into_api),
+            height: self.height.map(IntoApi::into_api),
+            max_width: self.max_width,
+            clip: self.clip,
+            children: self.children.into_iter().map(IntoApi::into_api).collect(),
+        }
     }
 }
 
@@ -125,7 +295,7 @@ impl Row {
         Self::default()
     }
 
-    pub fn with_children(children: impl IntoIterator<Item = WidgetDef>) -> Self {
+    pub fn new_with_children(children: impl IntoIterator<Item = WidgetDef>) -> Self {
         Self {
             children: children.into_iter().collect(),
             ..Default::default()
@@ -174,9 +344,9 @@ impl Row {
         }
     }
 
-    pub fn push(self, child: WidgetDef) -> Self {
+    pub fn push(self, child: impl Into<WidgetDef>) -> Self {
         let mut children = self.children;
-        children.push(child);
+        children.push(child.into());
         Self { children, ..self }
     }
 }
@@ -377,6 +547,108 @@ impl Scrollable {
         Self {
             direction: Some(direction),
             ..self
+        }
+    }
+}
+
+pub struct Container {
+    pub padding: Option<Padding>,
+    pub width: Option<Length>,
+    pub height: Option<Length>,
+    pub max_width: Option<f32>,
+    pub max_height: Option<f32>,
+    pub horizontal_alignment: Option<Alignment>,
+    pub vertical_alignment: Option<Alignment>,
+    pub clip: Option<bool>,
+    pub child: WidgetDef,
+}
+
+impl Container {
+    pub fn new(child: impl Into<WidgetDef>) -> Self {
+        Self {
+            child: child.into(),
+            padding: None,
+            width: None,
+            height: None,
+            max_width: None,
+            max_height: None,
+            horizontal_alignment: None,
+            vertical_alignment: None,
+            clip: None,
+        }
+    }
+
+    pub fn with_padding(self, padding: Padding) -> Self {
+        Self {
+            padding: Some(padding),
+            ..self
+        }
+    }
+
+    pub fn with_width(self, width: Length) -> Self {
+        Self {
+            width: Some(width),
+            ..self
+        }
+    }
+
+    pub fn with_height(self, height: Length) -> Self {
+        Self {
+            height: Some(height),
+            ..self
+        }
+    }
+
+    pub fn with_max_width(self, max_width: f32) -> Self {
+        Self {
+            max_width: Some(max_width),
+            ..self
+        }
+    }
+
+    pub fn with_max_height(self, max_height: f32) -> Self {
+        Self {
+            max_height: Some(max_height),
+            ..self
+        }
+    }
+
+    pub fn with_horizontal_alignment(self, horizontal_alignment: Alignment) -> Self {
+        Self {
+            horizontal_alignment: Some(horizontal_alignment),
+            ..self
+        }
+    }
+
+    pub fn with_vertical_alignment(self, vertical_alignment: Alignment) -> Self {
+        Self {
+            vertical_alignment: Some(vertical_alignment),
+            ..self
+        }
+    }
+
+    pub fn with_clip(self, clip: bool) -> Self {
+        Self {
+            clip: Some(clip),
+            ..self
+        }
+    }
+}
+
+impl IntoApi for Container {
+    type ApiType = widget::v0alpha1::Container;
+
+    fn into_api(self) -> Self::ApiType {
+        widget::v0alpha1::Container {
+            padding: self.padding.map(IntoApi::into_api),
+            width: self.width.map(IntoApi::into_api),
+            height: self.height.map(IntoApi::into_api),
+            max_width: self.max_width,
+            max_height: self.max_height,
+            horizontal_alignment: self.horizontal_alignment.map(|it| it.into_api() as i32),
+            vertical_alignment: self.vertical_alignment.map(|it| it.into_api() as i32),
+            clip: self.clip,
+            child: Some(Box::new(self.child.into_api())),
         }
     }
 }

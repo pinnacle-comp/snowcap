@@ -1,4 +1,3 @@
-use iced_wgpu::core::SmolStr;
 use smithay_client_toolkit::{
     delegate_keyboard,
     reexports::client::{
@@ -9,18 +8,18 @@ use smithay_client_toolkit::{
     shell::{wlr_layer::LayerSurface, WaylandSurface},
 };
 
-use crate::state::State;
+use crate::{input::keyboard::keysym_to_iced_key_and_loc, state::State};
 
 impl KeyboardHandler for State {
     fn enter(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        keyboard: &WlKeyboard,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &WlKeyboard,
         surface: &WlSurface,
-        serial: u32,
-        raw: &[u32],
-        keysyms: &[Keysym],
+        _serial: u32,
+        _raw: &[u32],
+        _keysyms: &[Keysym],
     ) {
         if let Some(layer) = self
             .layers
@@ -33,11 +32,11 @@ impl KeyboardHandler for State {
 
     fn leave(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        keyboard: &WlKeyboard,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &WlKeyboard,
         surface: &WlSurface,
-        serial: u32,
+        _serial: u32,
     ) {
         if let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() {
             if layer.wl_surface() == surface {
@@ -48,10 +47,10 @@ impl KeyboardHandler for State {
 
     fn press_key(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        keyboard: &WlKeyboard,
-        serial: u32,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &WlKeyboard,
+        _serial: u32,
         event: KeyEvent,
     ) {
         let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() else {
@@ -62,11 +61,7 @@ impl KeyboardHandler for State {
             return;
         };
 
-        let key = event
-            .keysym
-            .key_char()
-            .map(|ch| iced::keyboard::Key::Character(SmolStr::new(ch.to_string())))
-            .unwrap_or(iced::keyboard::Key::Unidentified);
+        let (key, location) = keysym_to_iced_key_and_loc(event.keysym);
 
         let mut modifiers = iced::keyboard::Modifiers::empty();
         if self.keyboard_modifiers.ctrl {
@@ -85,7 +80,7 @@ impl KeyboardHandler for State {
         snowcap_layer.widgets.queue_event(iced::Event::Keyboard(
             iced::keyboard::Event::KeyPressed {
                 key,
-                location: iced::keyboard::Location::Standard,
+                location,
                 modifiers,
                 text: None,
             },
@@ -94,10 +89,10 @@ impl KeyboardHandler for State {
 
     fn release_key(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        keyboard: &WlKeyboard,
-        serial: u32,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &WlKeyboard,
+        _serial: u32,
         event: KeyEvent,
     ) {
         let Some(KeyboardFocus::Layer(layer)) = self.keyboard_focus.as_ref() else {
@@ -108,11 +103,7 @@ impl KeyboardHandler for State {
             return;
         };
 
-        let key = event
-            .keysym
-            .key_char()
-            .map(|ch| iced::keyboard::Key::Character(SmolStr::new(ch.to_string())))
-            .unwrap_or(iced::keyboard::Key::Unidentified);
+        let (key, location) = keysym_to_iced_key_and_loc(event.keysym);
 
         let mut modifiers = iced::keyboard::Modifiers::empty();
         if self.keyboard_modifiers.ctrl {
@@ -131,7 +122,7 @@ impl KeyboardHandler for State {
         snowcap_layer.widgets.queue_event(iced::Event::Keyboard(
             iced::keyboard::Event::KeyReleased {
                 key,
-                location: iced::keyboard::Location::Standard,
+                location,
                 modifiers,
             },
         ));
@@ -139,12 +130,12 @@ impl KeyboardHandler for State {
 
     fn update_modifiers(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        keyboard: &WlKeyboard,
-        serial: u32,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &WlKeyboard,
+        _serial: u32,
         modifiers: Modifiers,
-        layout: u32,
+        _layout: u32,
     ) {
         // TODO: per wl_keyboard
         self.keyboard_modifiers = modifiers;

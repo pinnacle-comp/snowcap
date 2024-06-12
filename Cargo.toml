@@ -36,3 +36,4 @@ prost = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
 snowcap-api-defs = { workspace = true }
+xkbcommon = "0.7.0"

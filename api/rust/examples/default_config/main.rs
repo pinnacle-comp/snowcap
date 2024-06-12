@@ -1,85 +1,48 @@
 use snowcap_api::{
     layer::{ExclusiveZone, KeyboardInteractivity},
-    widget::{Length, Row, Scrollable, Text, WidgetDef},
+    widget::{Column, Container, Length, Padding, Row, Scrollable, Text, WidgetDef},
 };
 
 #[tokio::main]
 async fn main() {
     let layer = snowcap_api::connect().await.unwrap();
 
-    // let widget = WidgetDef::Text(Text::new("hello world! lorem ipsum weiohtwe wetoiph ewtoh pwt tewu weutih o uiogwte uiowte t twe uigowetig ouywtegio tw4iog wtiog pwt34ig owtgi ouwt igoyuwtg 8624g 789642g 7890624g78 642g78 2487g 42358g 754 8go7354w8og 523o 8g7352aw 8og7523 g8o7352g 87o3254g 87o3528 g7o5328 g7o532a8g 7o532g 87o532a 8g753 8g7538g 75a328 g75a3 8g7532a48og 7543gyo 4tgy ourtesgy uoterwgy uwetyg uwer gbrfe gvybrawefy uiwet yuwety guwte yguwet ugywetgy uoiwet gyuoiwetuy giowetugy wetguy iowetgy uwet"));
-    // layer.new_widget(
-    //     widget,
-    //     400,
-    //     200,
-    //     None,
-    //     KeyboardInteractivity::None,
-    //     ExclusiveZone::Respect,
-    // );
+    let test_key_descs = [
+        ("Super + Enter", "Open `alacritty`"),
+        ("Super + M", "Toggle maximized"),
+        ("Super + F", "Toggle fullscreen"),
+        ("Super + Shift + Q", "Exit Pinnacle"),
+    ];
 
-    let w = WidgetDef::Row(Row::with_children([
-        Text::new("hi row 1")
-            .with_width(Length::FillPortion(1))
-            .into(),
-        Text::new("hi row 2")
-            .with_width(Length::FillPortion(1))
-            .into(),
-    ]));
-
-    let scrollable = WidgetDef::Scrollable(Box::new(
-        Scrollable::new(Text::new(
-            "a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            a lot of text ioheth ioetih oetih oewtioh etwioh rwelhkwe \
-            ",
-        ))
-        .with_width(Length::Fill),
-    ));
+    let widget = Container::new(Row::new_with_children([
+        Column::new_with_children(
+            test_key_descs
+                .iter()
+                .map(|(keys, _)| Text::new(keys).into()),
+        )
+        .with_width(Length::FillPortion(1))
+        .into(),
+        Column::new_with_children(
+            test_key_descs
+                .iter()
+                .map(|(_, desc)| Text::new(desc).into()),
+        )
+        .with_width(Length::FillPortion(1))
+        .into(),
+    ]))
+    .with_width(Length::Fill)
+    .with_height(Length::Fill)
+    .with_padding(Padding {
+        top: 4.0,
+        right: 4.0,
+        bottom: 4.0,
+        left: 4.0,
+    });
 
     layer.new_widget(
-        scrollable,
-        200,
+        widget.into(),
         400,
+        500,
         None,
         KeyboardInteractivity::None,
         ExclusiveZone::Respect,
