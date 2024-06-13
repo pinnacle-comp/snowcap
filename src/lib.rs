@@ -14,15 +14,30 @@ use std::time::Duration;
 
 use futures::Future;
 use server::socket_dir;
-use smithay_client_toolkit::{reexports::calloop::EventLoop, shell::WaylandSurface};
+use smithay_client_toolkit::{
+    reexports::calloop::{self, EventLoop},
+    shell::WaylandSurface,
+};
 use state::State;
 
-pub fn start() {
+pub fn start(kill_ping: Option<calloop::ping::PingSource>) {
     let mut event_loop = EventLoop::<State>::try_new().unwrap();
 
     let mut state = State::new(event_loop.handle(), event_loop.get_signal()).unwrap();
 
     state.start_grpc_server(socket_dir()).unwrap();
+
+    if let Some(kill_ping) = kill_ping {
+        let loop_signal = event_loop.get_signal();
+
+        event_loop
+            .handle()
+            .insert_source(kill_ping, move |_, _, _| {
+                loop_signal.stop();
+                loop_signal.wakeup();
+            })
+            .unwrap();
+    }
 
     event_loop
         .run(Duration::from_secs(1), &mut state, |state| {
