@@ -16,4 +16,10 @@ pub mod snowcap {
             tonic::include_proto!("snowcap.layer.v0alpha1");
         }
     }
+
+    pub mod input {
+        pub mod v0alpha1 {
+            tonic::include_proto!("snowcap.input.v0alpha1");
+        }
+    }
 }

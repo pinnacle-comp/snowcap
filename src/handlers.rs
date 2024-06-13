@@ -38,7 +38,7 @@ impl SeatHandler for State {
         &mut self.seat_state
     }
 
-    fn new_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: WlSeat) {
+    fn new_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {
         // TODO:
     }
 
@@ -80,7 +80,7 @@ impl SeatHandler for State {
         }
     }
 
-    fn remove_seat(&mut self, conn: &Connection, qh: &QueueHandle<Self>, seat: WlSeat) {
+    fn remove_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {
         // TODO:
     }
 }
@@ -91,23 +91,23 @@ impl OutputHandler for State {
         &mut self.output_state
     }
 
-    fn new_output(&mut self, conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
+    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
         // TODO:
     }
 
-    fn update_output(&mut self, conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
+    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
         // TODO:
     }
 
-    fn output_destroyed(&mut self, conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
+    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
         // TODO:
     }
 }
 delegate_output!(State);
 
 impl LayerShellHandler for State {
-    fn closed(&mut self, conn: &Connection, qh: &QueueHandle<Self>, layer: &LayerSurface) {
-        // TODO:
+    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
+        self.layers.retain(|sn_layer| &sn_layer.layer != layer);
     }
 
     fn configure(
@@ -153,7 +153,13 @@ impl CompositorHandler for State {
         // TODO:
     }
 
-    fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, time: u32) {
+    fn frame(
+        &mut self,
+        _conn: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: &WlSurface,
+        _time: u32,
+    ) {
         let layer = self
             .layers
             .iter_mut()
@@ -171,20 +177,20 @@ impl CompositorHandler for State {
 
     fn surface_enter(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        surface: &WlSurface,
-        output: &wl_output::WlOutput,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _surface: &WlSurface,
+        _output: &wl_output::WlOutput,
     ) {
         // TODO:
     }
 
     fn surface_leave(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        surface: &WlSurface,
-        output: &wl_output::WlOutput,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _surface: &WlSurface,
+        _output: &wl_output::WlOutput,
     ) {
         // TODO:
     }

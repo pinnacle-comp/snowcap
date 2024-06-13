@@ -11,7 +11,40 @@ use snowcap_api_defs::snowcap::widget::{
     v0alpha1::{widget_def, WidgetDef},
 };
 
-use crate::util::convert::FromApi;
+use crate::{layer::SnowcapLayer, state::State, util::convert::FromApi};
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct WidgetId(u32);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct WidgetIdCounter(WidgetId);
+
+impl WidgetIdCounter {
+    pub fn next_and_increment(&mut self) -> WidgetId {
+        let ret = self.0;
+        self.0 .0 += 1;
+        ret
+    }
+}
+
+impl WidgetId {
+    pub fn into_inner(self) -> u32 {
+        self.0
+    }
+
+    pub fn layer_for_mut<'a>(&self, state: &'a mut State) -> Option<&'a mut SnowcapLayer> {
+        state
+            .layers
+            .iter_mut()
+            .find(|sn_layer| &sn_layer.widget_id == self)
+    }
+}
+
+impl From<u32> for WidgetId {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
 
 pub struct SnowcapWidgetProgram {
     pub widgets: WidgetFn,

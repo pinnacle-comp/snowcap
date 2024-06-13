@@ -1,15 +1,28 @@
 use std::num::NonZeroU32;
 
-use snowcap_api_defs::snowcap::layer::{
-    self,
-    v0alpha1::{layer_service_client::LayerServiceClient, NewLayerRequest},
+use snowcap_api_defs::snowcap::{
+    input::v0alpha1::{input_service_client::InputServiceClient, KeyboardKeyRequest},
+    layer::{
+        self,
+        v0alpha1::{layer_service_client::LayerServiceClient, CloseRequest, NewLayerRequest},
+    },
 };
+use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
+use tokio_stream::StreamExt;
 use tonic::transport::Channel;
+use xkbcommon::xkb::Keysym;
 
-use crate::{block_on_tokio, util::IntoApi, widget::WidgetDef};
+use crate::{
+    block_on_tokio,
+    input::Modifiers,
+    util::IntoApi,
+    widget::{WidgetDef, WidgetId},
+};
 
 pub struct Layer {
     client: LayerServiceClient<Channel>,
+    input_client: InputServiceClient<Channel>,
+    join_handle_sender: UnboundedSender<JoinHandle<()>>,
 }
 
 // TODO: change to bitflag
@@ -71,10 +84,30 @@ impl From<ExclusiveZone> for i32 {
     }
 }
 
+pub enum ZLayer {
+    Background,
+    Bottom,
+    Top,
+    Overlay,
+}
+
+impl From<ZLayer> for layer::v0alpha1::Layer {
+    fn from(value: ZLayer) -> Self {
+        match value {
+            ZLayer::Background => Self::Background,
+            ZLayer::Bottom => Self::Bottom,
+            ZLayer::Top => Self::Top,
+            ZLayer::Overlay => Self::Overlay,
+        }
+    }
+}
+
 impl Layer {
-    pub(crate) fn new(channel: Channel) -> Self {
+    pub(crate) fn new(channel: Channel, sender: UnboundedSender<JoinHandle<()>>) -> Self {
         Self {
-            client: LayerServiceClient::new(channel),
+            client: LayerServiceClient::new(channel.clone()),
+            input_client: InputServiceClient::new(channel),
+            join_handle_sender: sender,
         }
     }
 
@@ -86,10 +119,11 @@ impl Layer {
         anchor: Option<Anchor>,
         keyboard_interactivity: KeyboardInteractivity,
         exclusive_zone: ExclusiveZone,
-    ) {
+        layer: ZLayer,
+    ) -> LayerHandle {
         let mut client = self.client.clone();
 
-        block_on_tokio(client.new_layer(NewLayerRequest {
+        let response = block_on_tokio(client.new_layer(NewLayerRequest {
             widget_def: Some(widget.into_api()),
             width: Some(width),
             height: Some(height),
@@ -98,7 +132,64 @@ impl Layer {
                 keyboard_interactivity,
             ) as i32),
             exclusive_zone: Some(exclusive_zone.into()),
+            layer: Some(layer::v0alpha1::Layer::from(layer) as i32),
         }))
         .unwrap();
+
+        let id = response
+            .into_inner()
+            .layer_id
+            .expect("id should not be null");
+
+        LayerHandle {
+            id: id.into(),
+            client,
+            input_client: self.input_client.clone(),
+            join_handle_sender: self.join_handle_sender.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LayerHandle {
+    id: WidgetId,
+    client: LayerServiceClient<Channel>,
+    input_client: InputServiceClient<Channel>,
+    join_handle_sender: UnboundedSender<JoinHandle<()>>,
+}
+
+impl LayerHandle {
+    pub fn close(&self) {
+        let mut client = self.client.clone();
+        block_on_tokio(client.close(CloseRequest {
+            layer_id: Some(self.id.into_inner()),
+        }))
+        .unwrap();
+    }
+
+    pub fn on_key_press(
+        &self,
+        mut on_press: impl FnMut(&LayerHandle, Keysym, Modifiers) + Send + 'static,
+    ) {
+        let mut client = self.input_client.clone();
+
+        let mut stream = block_on_tokio(client.keyboard_key(KeyboardKeyRequest {
+            id: Some(self.id.into_inner()),
+        }))
+        .unwrap()
+        .into_inner();
+
+        let handle = self.clone();
+
+        self.join_handle_sender
+            .send(tokio::spawn(async move {
+                while let Some(Ok(response)) = stream.next().await {
+                    let key = Keysym::new(response.key());
+                    let mods = Modifiers::from(response.modifiers.unwrap_or_default());
+
+                    on_press(&handle, key, mods);
+                }
+            }))
+            .unwrap();
     }
 }

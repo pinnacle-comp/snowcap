@@ -10,11 +10,11 @@ impl WaylandClipboard {
 }
 
 impl iced_wgpu::core::Clipboard for WaylandClipboard {
-    fn read(&self, kind: iced_wgpu::core::clipboard::Kind) -> Option<String> {
+    fn read(&self, _kind: iced_wgpu::core::clipboard::Kind) -> Option<String> {
         self.0.load().ok()
     }
 
-    fn write(&mut self, kind: iced_wgpu::core::clipboard::Kind, contents: String) {
+    fn write(&mut self, _kind: iced_wgpu::core::clipboard::Kind, contents: String) {
         self.0.store(contents)
     }
 }

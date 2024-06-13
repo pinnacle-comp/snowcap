@@ -46,7 +46,7 @@ pub fn setup_wgpu() -> anyhow::Result<Wgpu> {
             internal_backend: Backends::GL | Backends::VULKAN,
             ..Default::default()
         },
-        wgpu::TextureFormat::Bgra8UnormSrgb,
+        wgpu::TextureFormat::Rgba8UnormSrgb,
     );
 
     let renderer = iced_wgpu::Renderer::new(backend, Default::default(), iced::Pixels(16.0));

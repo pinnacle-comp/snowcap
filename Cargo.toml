@@ -13,6 +13,10 @@ tonic-reflection = "0.11.0"
 tonic-build = "0.11.0"
 xdg = "2.5.2"
 snowcap-api-defs = { path = "./snowcap-api-defs" }
+xkbcommon = "0.7.0"
+
+[workspace.lints.clippy]
+too_many_arguments = "allow"
 
 [package]
 name = "snowcap"
@@ -38,4 +42,7 @@ prost = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
 snowcap-api-defs = { workspace = true }
-xkbcommon = "0.7.0"
+xkbcommon = { workspace = true }
+
+[lints]
+workspace = true

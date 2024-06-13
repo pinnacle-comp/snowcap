@@ -1,16 +1,16 @@
-use std::{num::NonZeroU32, path::Path};
+pub mod input;
 
-use anyhow::Context;
+use std::{num::NonZeroU32, pin::Pin};
+
+use futures::Stream;
 use smithay_client_toolkit::{reexports::calloop, shell::wlr_layer};
 use snowcap_api_defs::snowcap::layer::{
     self,
-    v0alpha1::{
-        layer_service_server::{self, LayerServiceServer},
-        NewLayerRequest, NewLayerResponse,
-    },
+    v0alpha1::{layer_service_server, CloseRequest, NewLayerRequest, NewLayerResponse},
 };
+use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tonic::{Request, Response, Status};
-use tracing::{error, warn};
+use tracing::warn;
 
 use crate::{
     layer::{ExclusiveZone, SnowcapLayer},
@@ -34,10 +34,10 @@ where
 
 async fn run_unary<F, T>(fn_sender: &StateFnSender, with_state: F) -> Result<Response<T>, Status>
 where
-    F: FnOnce(&mut State) -> T + Send + 'static,
+    F: FnOnce(&mut State) -> Result<T, Status> + Send + 'static,
     T: Send + 'static,
 {
-    let (sender, receiver) = tokio::sync::oneshot::channel::<T>();
+    let (sender, receiver) = tokio::sync::oneshot::channel::<Result<T, Status>>();
 
     let f = Box::new(|state: &mut State| {
         // TODO: find a way to handle this error
@@ -50,81 +50,53 @@ where
         .send(f)
         .map_err(|_| Status::internal("failed to execute request"))?;
 
-    receiver.await.map(Response::new).map_err(|err| {
-        Status::internal(format!(
+    let ret = receiver.await;
+
+    match ret {
+        Ok(it) => Ok(Response::new(it?)),
+        Err(err) => Err(Status::internal(format!(
             "failed to transfer response for transport to client: {err}"
-        ))
-    })
+        ))),
+    }
 }
 
-impl State {
-    pub fn start_grpc_server(&mut self, socket_dir: impl AsRef<Path>) -> anyhow::Result<()> {
-        let socket_dir = socket_dir.as_ref();
-        std::fs::create_dir_all(socket_dir)?;
+fn run_server_streaming<F, T>(
+    fn_sender: &StateFnSender,
+    with_state: F,
+) -> Result<Response<ResponseStream<T>>, Status>
+where
+    F: FnOnce(&mut State, UnboundedSender<Result<T, Status>>) + Send + 'static,
+    T: Send + 'static,
+{
+    let (sender, receiver) = unbounded_channel::<Result<T, Status>>();
 
-        // let socket_name = format!("snowcap-grpc-{}.sock", std::process::id());
-        let socket_name = "snowcap-grpc.sock";
+    let f = Box::new(|state: &mut State| {
+        with_state(state, sender);
+    });
 
-        let socket_path = socket_dir.join(socket_name);
+    fn_sender
+        .send(f)
+        .map_err(|_| Status::internal("failed to execute request"))?;
 
-        if let Ok(true) = socket_path.try_exists() {
-            std::fs::remove_file(&socket_path)
-                .context(format!("failed to remove old socket at {socket_path:?}"))?;
-        }
-
-        let proto_dir = xdg::BaseDirectories::with_prefix("snowcap")?.get_data_file("protobuf");
-
-        std::env::set_var("SNOWCAP_PROTO_DIR", proto_dir);
-
-        let (grpc_sender, grpc_recv) =
-            calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
-
-        self.loop_handle
-            .insert_source(grpc_recv, |msg, _, state| match msg {
-                calloop::channel::Event::Msg(f) => f(state),
-                calloop::channel::Event::Closed => error!("grpc receiver was closed"),
-            })
-            .unwrap();
-
-        let snowcap_service = SnowcapService::new(grpc_sender.clone());
-        let layer_service = LayerService::new(grpc_sender.clone());
-
-        let refl_service = tonic_reflection::server::Builder::configure()
-            .register_encoded_file_descriptor_set(snowcap_api_defs::FILE_DESCRIPTOR_SET)
-            .build()?;
-
-        let uds = tokio::net::UnixListener::bind(&socket_path)?;
-        let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
-
-        std::env::set_var("SNOWCAP_GRPC_SOCKET", &socket_path);
-
-        let grpc_server = tonic::transport::Server::builder()
-            .add_service(refl_service)
-            .add_service(LayerServiceServer::new(layer_service));
-
-        let todo = tokio::spawn(async move {
-            if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
-                error!("gRPC server error: {err}");
-            }
-        });
-
-        Ok(())
-    }
+    let receiver_stream = tokio_stream::wrappers::UnboundedReceiverStream::new(receiver);
+    Ok(Response::new(Box::pin(receiver_stream)))
 }
 
 type StateFnSender = calloop::channel::Sender<Box<dyn FnOnce(&mut State) + Send>>;
 
-struct SnowcapService {
-    sender: StateFnSender,
+type ResponseStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>;
+
+pub struct SnowcapService {
+    _sender: StateFnSender,
 }
 
 impl SnowcapService {
     pub fn new(sender: StateFnSender) -> Self {
-        Self { sender }
+        Self { _sender: sender }
     }
 }
 
-struct LayerService {
+pub struct LayerService {
     sender: StateFnSender,
 }
 
@@ -189,7 +161,7 @@ impl layer_service_server::LayerService for LayerService {
 
         run_unary(&self.sender, move |state| {
             let Some((f, states)) = widget_def_to_fn(widget_def) else {
-                return NewLayerResponse {}; // TODO: error
+                return Err(Status::invalid_argument("widget def was null"));
             };
 
             let layer = SnowcapLayer::new(
@@ -205,9 +177,28 @@ impl layer_service_server::LayerService for LayerService {
                 },
             );
 
+            let ret = Ok(NewLayerResponse {
+                layer_id: Some(layer.widget_id.into_inner()),
+            });
+
             state.layers.push(layer);
 
-            NewLayerResponse {}
+            ret
+        })
+        .await
+    }
+
+    async fn close(&self, request: Request<CloseRequest>) -> Result<Response<()>, Status> {
+        let request = request.into_inner();
+
+        let Some(id) = request.layer_id else {
+            return Err(Status::invalid_argument("layer id was null"));
+        };
+
+        run_unary_no_response(&self.sender, move |state| {
+            state
+                .layers
+                .retain(|sn_layer| sn_layer.widget_id.into_inner() != id);
         })
         .await
     }

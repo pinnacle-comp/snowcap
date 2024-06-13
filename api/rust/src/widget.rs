@@ -2,6 +2,21 @@ use snowcap_api_defs::snowcap::widget;
 
 use crate::util::IntoApi;
 
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
+pub struct WidgetId(u32);
+
+impl WidgetId {
+    pub fn into_inner(self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for WidgetId {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
 pub enum WidgetDef {
     Text(Text),
     Column(Column),

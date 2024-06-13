@@ -17,12 +17,15 @@ use smithay_client_toolkit::{
         WaylandSurface,
     },
 };
+use snowcap_api_defs::snowcap::input::v0alpha1::{KeyboardKeyResponse, PointerButtonResponse};
+use tokio::sync::mpsc::UnboundedSender;
+use tonic::Status;
 
 use crate::{
     clipboard::WaylandClipboard,
     runtime::{CalloopSenderSink, CurrentTokioExecutor},
     state::State,
-    widget::{SnowcapMessage, SnowcapWidgetProgram},
+    widget::{SnowcapMessage, SnowcapWidgetProgram, WidgetId},
 };
 
 pub struct SnowcapLayer {
@@ -40,6 +43,11 @@ pub struct SnowcapLayer {
     pub pointer_location: Option<(f64, f64)>,
 
     pub runtime: Runtime<CurrentTokioExecutor, CalloopSenderSink<SnowcapMessage>, SnowcapMessage>,
+
+    pub widget_id: WidgetId,
+
+    pub keyboard_key_sender: Option<UnboundedSender<Result<KeyboardKeyResponse, Status>>>,
+    pub pointer_button_sender: Option<UnboundedSender<Result<PointerButtonResponse, Status>>>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -100,16 +108,15 @@ impl SnowcapLayer {
                 .unwrap()
         };
 
-        let capabilities = wgpu_surface.get_capabilities(&state.wgpu.adapter);
         let surface_config = iced_wgpu::wgpu::SurfaceConfiguration {
             usage: iced_wgpu::wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: iced_wgpu::wgpu::TextureFormat::Bgra8UnormSrgb,
+            format: iced_wgpu::wgpu::TextureFormat::Rgba8UnormSrgb,
             width,
             height,
             present_mode: iced_wgpu::wgpu::PresentMode::Mailbox,
             desired_maximum_frame_latency: 1,
-            alpha_mode: iced_wgpu::wgpu::CompositeAlphaMode::Auto,
-            view_formats: vec![iced_wgpu::wgpu::TextureFormat::Bgra8UnormSrgb],
+            alpha_mode: iced_wgpu::wgpu::CompositeAlphaMode::PreMultiplied,
+            view_formats: vec![iced_wgpu::wgpu::TextureFormat::Rgba8UnormSrgb],
         };
 
         wgpu_surface.configure(&state.wgpu.device, &surface_config);
@@ -125,46 +132,51 @@ impl SnowcapLayer {
             unsafe { WaylandClipboard::new(state.conn.backend().display_ptr() as *mut _) };
 
         let (sender, recv) = calloop::channel::channel::<SnowcapMessage>();
-        let mut runtime = Runtime::new(CurrentTokioExecutor, CalloopSenderSink::new(sender));
+        let runtime = Runtime::new(CurrentTokioExecutor, CalloopSenderSink::new(sender));
 
         let layer_clone = layer.clone();
         state
             .loop_handle
             .insert_source(recv, move |event, _, state| match event {
-                calloop::channel::Event::Msg(message) => match message {
-                    SnowcapMessage::Close => {
-                        state
-                            .layers
-                            .retain(|sn_layer| sn_layer.layer != layer_clone);
-                    }
-                    msg => {
-                        if let Some(layer) = state
-                            .layers
-                            .iter_mut()
-                            .find(|sn_layer| sn_layer.layer == layer_clone)
-                        {
+                calloop::channel::Event::Msg(message) => {
+                    let Some(layer) = state
+                        .layers
+                        .iter_mut()
+                        .find(|sn_layer| sn_layer.layer == layer_clone)
+                    else {
+                        return;
+                    };
+
+                    match message {
+                        SnowcapMessage::Close => {
+                            state
+                                .layers
+                                .retain(|sn_layer| sn_layer.layer != layer_clone);
+                        }
+                        msg => {
                             layer.widgets.queue_message(msg);
                         }
                     }
-                },
+                }
                 calloop::channel::Event::Closed => (),
             })
             .unwrap();
 
-        runtime.track(
-            iced::keyboard::on_key_press(|key, mods| {
-                if matches!(
-                    key,
-                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
-                ) {
-                    tracing::info!("GOT CLOSE");
-                    Some(SnowcapMessage::Close)
-                } else {
-                    None
-                }
-            })
-            .into_recipes(),
-        );
+        // runtime.track(
+        //     iced::keyboard::on_key_press(|key, _mods| {
+        //         if matches!(
+        //             key,
+        //             iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
+        //         ) {
+        //             Some(SnowcapMessage::Close)
+        //         } else {
+        //             None
+        //         }
+        //     })
+        //     .into_recipes(),
+        // );
+
+        let next_id = state.widget_id_counter.next_and_increment();
 
         Self {
             surface: wgpu_surface,
@@ -176,6 +188,9 @@ impl SnowcapLayer {
             clipboard,
             pointer_location: None,
             runtime,
+            widget_id: next_id,
+            keyboard_key_sender: None,
+            pointer_button_sender: None,
         }
     }
 
@@ -204,7 +219,7 @@ impl SnowcapLayer {
                     queue,
                     &mut encoder,
                     Some(iced::Color::TRANSPARENT),
-                    iced_wgpu::wgpu::TextureFormat::Bgra8UnormSrgb,
+                    iced_wgpu::wgpu::TextureFormat::Rgba8UnormSrgb,
                     &view,
                     primitives,
                     &self.viewport,
@@ -243,7 +258,8 @@ impl SnowcapLayer {
             }),
             None => iced::mouse::Cursor::Unavailable,
         };
-        let (events, command) = self.widgets.update(
+        // TODO: the command bit
+        let (events, _command) = self.widgets.update(
             self.viewport.logical_size(),
             cursor,
             renderer,

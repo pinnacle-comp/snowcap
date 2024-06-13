@@ -7,11 +7,6 @@ pub trait FromApi {
     fn from_api(api_type: Self::ApiType) -> Self;
 }
 
-pub trait IntoApi {
-    type ApiType;
-    fn into_api(self) -> Self::ApiType;
-}
-
 impl FromApi for iced::Length {
     type ApiType = widget::v0alpha1::Length;
 

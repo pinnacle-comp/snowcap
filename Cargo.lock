@@ -2726,6 +2726,8 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tower",
+ "xdg",
+ "xkbcommon",
 ]
 
 [[package]]

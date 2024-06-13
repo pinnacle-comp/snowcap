@@ -7,6 +7,7 @@ use smithay_client_toolkit::{
     seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
     shell::{wlr_layer::LayerSurface, WaylandSurface},
 };
+use snowcap_api_defs::snowcap::input::{self, v0alpha1::KeyboardKeyResponse};
 
 use crate::{input::keyboard::keysym_to_iced_key_and_loc, state::State};
 
@@ -85,6 +86,20 @@ impl KeyboardHandler for State {
                 text: None,
             },
         ));
+
+        if let Some(sender) = snowcap_layer.keyboard_key_sender.as_ref() {
+            let api_modifiers = input::v0alpha1::Modifiers {
+                shift: Some(self.keyboard_modifiers.shift),
+                ctrl: Some(self.keyboard_modifiers.ctrl),
+                alt: Some(self.keyboard_modifiers.alt),
+                super_: Some(self.keyboard_modifiers.logo),
+            };
+            let _ = sender.send(Ok(KeyboardKeyResponse {
+                key: Some(event.keysym.raw()),
+                modifiers: Some(api_modifiers),
+                pressed: Some(true),
+            }));
+        }
     }
 
     fn release_key(
