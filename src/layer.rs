@@ -33,8 +33,9 @@ pub struct SnowcapLayer {
     surface: iced_wgpu::wgpu::Surface<'static>,
     pub layer: LayerSurface,
 
-    width: u32,
-    height: u32,
+    pub width: u32,
+    pub height: u32,
+    pub scale: i32,
     pub viewport: Viewport,
 
     pub widgets: iced_runtime::program::State<SnowcapWidgetProgram>,
@@ -183,6 +184,7 @@ impl SnowcapLayer {
             layer,
             width,
             height,
+            scale: 1,
             viewport: Viewport::with_physical_size(Size::new(width, height), 1.0),
             widgets,
             clipboard,
@@ -230,15 +232,16 @@ impl SnowcapLayer {
 
         queue.submit(Some(encoder.finish()));
 
-        self.layer
-            .wl_surface()
-            .damage_buffer(0, 0, self.width as i32, self.height as i32);
+        self.layer.wl_surface().damage_buffer(
+            0,
+            0,
+            self.width as i32 * self.scale,
+            self.height as i32 * self.scale,
+        );
 
-        // FIXME: draws every frame continuously; only request a frame if
-        // !self.widgets.is_queue_empty()
-        self.layer
-            .wl_surface()
-            .frame(qh, self.layer.wl_surface().clone());
+        // self.layer
+        //     .wl_surface()
+        //     .frame(qh, self.layer.wl_surface().clone());
 
         // Does a commit
         frame.present();
@@ -276,5 +279,24 @@ impl SnowcapLayer {
         }
 
         self.draw(device, queue, renderer, qh);
+    }
+
+    pub fn set_scale(&mut self, scale: i32, device: &iced_wgpu::wgpu::Device) {
+        self.scale = scale;
+        self.layer.wl_surface().set_buffer_scale(scale);
+        self.layer.commit();
+
+        let surface_config = iced_wgpu::wgpu::SurfaceConfiguration {
+            usage: iced_wgpu::wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: iced_wgpu::wgpu::TextureFormat::Rgba8UnormSrgb,
+            width: self.width * scale as u32,
+            height: self.height * scale as u32,
+            present_mode: iced_wgpu::wgpu::PresentMode::Mailbox,
+            desired_maximum_frame_latency: 1,
+            alpha_mode: iced_wgpu::wgpu::CompositeAlphaMode::PreMultiplied,
+            view_formats: vec![iced_wgpu::wgpu::TextureFormat::Rgba8UnormSrgb],
+        };
+
+        self.surface.configure(device, &surface_config);
     }
 }

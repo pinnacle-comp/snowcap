@@ -63,13 +63,7 @@ async fn main() {
         left: 12.0,
     })
     .with_border_radius(64.0)
-    .with_border_thickness(6.0)
-    .with_background_color(Color {
-        red: 0.5,
-        green: 0.0,
-        blue: 0.0,
-        alpha: 0.3,
-    });
+    .with_border_thickness(6.0);
 
     layer
         .new_widget(
@@ -82,7 +76,11 @@ async fn main() {
             ZLayer::Top,
         )
         .on_key_press(|handle, _key, _mods| {
-            handle.close();
+            dbg!(_key);
+            if _key == xkbcommon::xkb::Keysym::Escape {
+                println!("closing");
+                handle.close();
+            }
         });
 
     snowcap_api::listen(recv).await;

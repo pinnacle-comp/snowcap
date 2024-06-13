@@ -5,7 +5,7 @@ use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
     reexports::{
-        calloop::LoopHandle,
+        calloop::{LoopHandle, LoopSignal},
         calloop_wayland_source::WaylandSource,
         client::{
             globals::registry_queue_init,
@@ -30,6 +30,7 @@ use crate::{
 
 pub struct State {
     pub loop_handle: LoopHandle<'static, State>,
+    pub loop_signal: LoopSignal,
     pub conn: Connection,
 
     pub registry_state: RegistryState,
@@ -55,7 +56,10 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(loop_handle: LoopHandle<'static, State>) -> anyhow::Result<Self> {
+    pub fn new(
+        loop_handle: LoopHandle<'static, State>,
+        loop_signal: LoopSignal,
+    ) -> anyhow::Result<Self> {
         let conn =
             Connection::connect_to_env().context("failed to establish wayland connection")?;
 
@@ -79,6 +83,7 @@ impl State {
 
         let state = State {
             loop_handle,
+            loop_signal,
             conn: conn.clone(),
             registry_state,
             seat_state,

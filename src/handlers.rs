@@ -1,6 +1,7 @@
 pub mod keyboard;
 pub mod pointer;
 
+use iced_wgpu::graphics::Viewport;
 use smithay_client_toolkit::{
     compositor::CompositorHandler,
     delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_seat,
@@ -140,7 +141,21 @@ impl CompositorHandler for State {
         surface: &WlSurface,
         new_factor: i32,
     ) {
-        // TODO:
+        tracing::info!("NEW SCALE: {new_factor}");
+        if let Some(layer) = self
+            .layers
+            .iter_mut()
+            .find(|sn_layer| sn_layer.layer.wl_surface() == surface)
+        {
+            layer.viewport = Viewport::with_physical_size(
+                iced::Size::new(
+                    layer.width * new_factor as u32,
+                    layer.height * new_factor as u32,
+                ),
+                new_factor as f64,
+            );
+            layer.set_scale(new_factor, &self.wgpu.device);
+        }
     }
 
     fn transform_changed(

@@ -10,10 +10,10 @@ mod util;
 mod wgpu;
 mod widget;
 
-use std::future::Future;
+use std::{future::Future, time::Duration};
 
 use server::socket_dir;
-use smithay_client_toolkit::reexports::calloop::EventLoop;
+use smithay_client_toolkit::{reexports::calloop::EventLoop, shell::WaylandSurface};
 use state::State;
 use tracing_subscriber::EnvFilter;
 
@@ -28,12 +28,12 @@ async fn main() -> anyhow::Result<()> {
 
     let mut event_loop = EventLoop::<State>::try_new().unwrap();
 
-    let mut state = State::new(event_loop.handle()).unwrap();
+    let mut state = State::new(event_loop.handle(), event_loop.get_signal()).unwrap();
 
     state.start_grpc_server(socket_dir()).unwrap();
 
     event_loop
-        .run(None, &mut state, |state| {
+        .run(Duration::from_secs(1), &mut state, |state| {
             let keyboard_focus_is_dead =
                 state
                     .keyboard_focus
@@ -45,6 +45,15 @@ async fn main() -> anyhow::Result<()> {
                     });
             if keyboard_focus_is_dead {
                 state.keyboard_focus = None;
+            }
+
+            for layer in state.layers.iter_mut() {
+                if !layer.widgets.is_queue_empty() {
+                    layer
+                        .layer
+                        .wl_surface()
+                        .frame(&state.queue_handle, layer.layer.wl_surface().clone());
+                }
             }
         })
         .unwrap();

@@ -33,7 +33,7 @@ pub fn setup_wgpu() -> anyhow::Result<Wgpu> {
         &wgpu::DeviceDescriptor {
             label: None,
             required_features: wgpu::Features::empty(), // TODO:
-            required_limits: wgpu::Limits::downlevel_defaults(),
+            required_limits: wgpu::Limits::downlevel_defaults().using_resolution(adapter.limits()),
         },
         None,
     ))?;

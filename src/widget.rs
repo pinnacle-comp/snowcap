@@ -59,6 +59,7 @@ pub type WidgetFn = Box<
 
 #[derive(Debug)]
 pub enum SnowcapMessage {
+    Noop,
     Close,
     Update(u32, Box<dyn Any + Send>),
 }
@@ -72,6 +73,7 @@ impl Program for SnowcapWidgetProgram {
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
+            SnowcapMessage::Noop => (),
             SnowcapMessage::Close => (),
             SnowcapMessage::Update(id, data) => {
                 self.widget_state.insert(id, data);
