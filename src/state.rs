@@ -24,6 +24,7 @@ use tonic::Status;
 use crate::{
     handlers::keyboard::KeyboardFocus,
     layer::SnowcapLayer,
+    server::GrpcServerState,
     wgpu::{setup_wgpu, Wgpu},
     widget::{WidgetId, WidgetIdCounter},
 };
@@ -38,6 +39,8 @@ pub struct State {
     pub output_state: OutputState,
     pub compositor_state: CompositorState,
     pub layer_shell_state: LayerShell,
+
+    pub grpc_server_state: Option<GrpcServerState>,
 
     pub queue_handle: QueueHandle<State>,
 
@@ -90,6 +93,7 @@ impl State {
             output_state,
             compositor_state,
             layer_shell_state,
+            grpc_server_state: None,
             queue_handle,
             wgpu: setup_wgpu()?,
             layers: Vec::new(),

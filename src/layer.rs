@@ -284,7 +284,6 @@ impl SnowcapLayer {
     pub fn set_scale(&mut self, scale: i32, device: &iced_wgpu::wgpu::Device) {
         self.scale = scale;
         self.layer.wl_surface().set_buffer_scale(scale);
-        self.layer.commit();
 
         let surface_config = iced_wgpu::wgpu::SurfaceConfiguration {
             usage: iced_wgpu::wgpu::TextureUsages::RENDER_ATTACHMENT,

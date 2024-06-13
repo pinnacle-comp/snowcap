@@ -136,12 +136,11 @@ delegate_layer!(State);
 impl CompositorHandler for State {
     fn scale_factor_changed(
         &mut self,
-        conn: &Connection,
+        _conn: &Connection,
         qh: &QueueHandle<Self>,
         surface: &WlSurface,
         new_factor: i32,
     ) {
-        tracing::info!("NEW SCALE: {new_factor}");
         if let Some(layer) = self
             .layers
             .iter_mut()
@@ -155,6 +154,12 @@ impl CompositorHandler for State {
                 new_factor as f64,
             );
             layer.set_scale(new_factor, &self.wgpu.device);
+            layer.update_and_draw(
+                &self.wgpu.device,
+                &self.wgpu.queue,
+                &mut self.wgpu.renderer,
+                qh,
+            );
         }
     }
 

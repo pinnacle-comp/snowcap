@@ -6,6 +6,7 @@ use snowcap_api_defs::snowcap::{
     input::v0alpha1::input_service_server::InputServiceServer,
     layer::v0alpha1::layer_service_server::LayerServiceServer,
 };
+use tokio::task::JoinHandle;
 use tracing::error;
 
 use crate::{
@@ -24,6 +25,17 @@ fn socket_name() -> String {
     format!("snowcap-grpc-{wayland_suffix}.sock")
 }
 
+pub struct GrpcServerState {
+    _join_handle: JoinHandle<()>,
+    socket_path: PathBuf,
+}
+
+impl Drop for GrpcServerState {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.socket_path);
+    }
+}
+
 impl State {
     pub fn start_grpc_server(&mut self, socket_dir: impl AsRef<Path>) -> anyhow::Result<()> {
         let socket_dir = socket_dir.as_ref();
@@ -35,10 +47,6 @@ impl State {
             std::fs::remove_file(&socket_path)
                 .context(format!("failed to remove old socket at {socket_path:?}"))?;
         }
-
-        let proto_dir = xdg::BaseDirectories::with_prefix("snowcap")?.get_data_file("protobuf");
-
-        std::env::set_var("SNOWCAP_PROTO_DIR", proto_dir);
 
         let (grpc_sender, grpc_recv) =
             calloop::channel::channel::<Box<dyn FnOnce(&mut State) + Send>>();
@@ -61,17 +69,20 @@ impl State {
         let uds = tokio::net::UnixListener::bind(&socket_path)?;
         let uds_stream = tokio_stream::wrappers::UnixListenerStream::new(uds);
 
-        std::env::set_var("SNOWCAP_GRPC_SOCKET", &socket_path);
-
         let grpc_server = tonic::transport::Server::builder()
             .add_service(refl_service)
             .add_service(LayerServiceServer::new(layer_service))
             .add_service(InputServiceServer::new(input_service));
 
-        let todo = tokio::spawn(async move {
+        let join_handle = tokio::spawn(async move {
             if let Err(err) = grpc_server.serve_with_incoming(uds_stream).await {
                 error!("gRPC server error: {err}");
             }
+        });
+
+        self.grpc_server_state = Some(GrpcServerState {
+            _join_handle: join_handle,
+            socket_path,
         });
 
         Ok(())
