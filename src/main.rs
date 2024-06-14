@@ -9,7 +9,7 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter(env_filter)
         .init();
 
-    tokio::task::spawn_blocking(|| snowcap::start(None))
+    tokio::task::spawn_blocking(|| snowcap::start(None, Default::default()))
         .await
         .unwrap();
 

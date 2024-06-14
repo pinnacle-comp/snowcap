@@ -10,7 +10,13 @@ pub mod util;
 pub mod wgpu;
 pub mod widget;
 
-use std::time::Duration;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use futures::Future;
 use server::socket_dir;
@@ -19,8 +25,11 @@ use smithay_client_toolkit::{
     shell::WaylandSurface,
 };
 use state::State;
+use tracing::info;
 
-pub fn start(kill_ping: Option<calloop::ping::PingSource>) {
+pub fn start(kill_ping: Option<calloop::ping::PingSource>, ready_flag: Arc<AtomicBool>) {
+    info!("Snowcap starting up");
+
     let mut event_loop = EventLoop::<State>::try_new().unwrap();
 
     let mut state = State::new(event_loop.handle(), event_loop.get_signal()).unwrap();
@@ -38,6 +47,8 @@ pub fn start(kill_ping: Option<calloop::ping::PingSource>) {
             })
             .unwrap();
     }
+
+    ready_flag.store(true, Ordering::SeqCst);
 
     event_loop
         .run(Duration::from_secs(1), &mut state, |state| {

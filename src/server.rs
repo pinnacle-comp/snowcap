@@ -7,7 +7,7 @@ use snowcap_api_defs::snowcap::{
     layer::v0alpha1::layer_service_server::LayerServiceServer,
 };
 use tokio::task::JoinHandle;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{
     api::{input::InputService, LayerService, SnowcapService},
@@ -79,6 +79,8 @@ impl State {
                 error!("gRPC server error: {err}");
             }
         });
+
+        info!("Started gRPC server at {socket_path:?}");
 
         self.grpc_server_state = Some(GrpcServerState {
             _join_handle: join_handle,
