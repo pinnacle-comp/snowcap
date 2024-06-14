@@ -23,16 +23,16 @@ async fn main() {
                 .iter()
                 .map(|(keys, _)| Text::new(keys).into()),
         )
-        .with_width(Length::FillPortion(1))
+        .width(Length::FillPortion(1))
         .into(),
         Column::new_with_children(
             test_key_descs
                 .iter()
                 .map(|(_, desc)| {
                     Text::new(desc)
-                        .with_horizontal_alignment(Alignment::End)
-                        .with_width(Length::Fill)
-                        .with_font(
+                        .horizontal_alignment(Alignment::End)
+                        .width(Length::Fill)
+                        .font(
                             Font::new_with_family(Family::Name(
                                 "JetBrainsMono Nerd Font".to_string(),
                             ))
@@ -42,37 +42,35 @@ async fn main() {
                 })
                 .chain([Row::new_with_children([
                     Text::new("first")
-                        .with_horizontal_alignment(Alignment::End)
+                        .horizontal_alignment(Alignment::End)
                         .into(),
-                    Container::new(
-                        Text::new("alacritty").with_horizontal_alignment(Alignment::End),
-                    )
-                    .with_background_color(Color {
-                        red: 0.5,
-                        green: 0.0,
-                        blue: 0.0,
-                        alpha: 1.0,
-                    })
-                    .with_width(Length::Shrink)
-                    .with_horizontal_alignment(Alignment::End)
-                    .into(),
+                    Container::new(Text::new("alacritty").horizontal_alignment(Alignment::End))
+                        .background_color(Color {
+                            red: 0.5,
+                            green: 0.0,
+                            blue: 0.0,
+                            alpha: 1.0,
+                        })
+                        .width(Length::Shrink)
+                        .horizontal_alignment(Alignment::End)
+                        .into(),
                 ])
                 .into()]),
         )
-        .with_width(Length::FillPortion(1))
-        .with_item_alignment(Alignment::End)
+        .width(Length::FillPortion(1))
+        .item_alignment(Alignment::End)
         .into(),
     ]))
-    .with_width(Length::Fill)
-    .with_height(Length::Fill)
-    .with_padding(Padding {
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .padding(Padding {
         top: 12.0,
         right: 12.0,
         bottom: 12.0,
         left: 12.0,
     })
-    .with_border_radius(64.0)
-    .with_border_thickness(6.0);
+    .border_radius(64.0)
+    .border_thickness(6.0);
 
     layer
         .new_widget(

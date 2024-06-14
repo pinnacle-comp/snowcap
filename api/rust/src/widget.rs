@@ -79,70 +79,52 @@ impl Text {
         }
     }
 
-    pub fn with_size(self, size: f32) -> Self {
+    pub fn size(self, size: f32) -> Self {
         Self {
             size: Some(size),
             ..self
         }
     }
 
-    pub fn with_width(self, width: Length) -> Self {
+    pub fn width(self, width: Length) -> Self {
         Self {
             width: Some(width),
             ..self
         }
     }
 
-    pub fn with_height(self, height: Length) -> Self {
+    pub fn height(self, height: Length) -> Self {
         Self {
             height: Some(height),
             ..self
         }
     }
 
-    pub fn with_horizontal_alignment(self, alignment: Alignment) -> Self {
+    pub fn horizontal_alignment(self, alignment: Alignment) -> Self {
         Self {
             horizontal_alignment: Some(alignment),
             ..self
         }
     }
 
-    pub fn with_vertical_alignment(self, alignment: Alignment) -> Self {
+    pub fn vertical_alignment(self, alignment: Alignment) -> Self {
         Self {
             vertical_alignment: Some(alignment),
             ..self
         }
     }
 
-    pub fn with_color(self, color: Color) -> Self {
+    pub fn color(self, color: Color) -> Self {
         Self {
             color: Some(color),
             ..self
         }
     }
 
-    pub fn with_font(self, font: Font) -> Self {
+    pub fn font(self, font: Font) -> Self {
         Self {
             font: Some(font),
             ..self
-        }
-    }
-}
-
-pub struct Color {
-    pub red: f32,
-    pub green: f32,
-    pub blue: f32,
-    pub alpha: f32,
-}
-
-impl From<Color> for widget::v0alpha1::Color {
-    fn from(value: Color) -> Self {
-        widget::v0alpha1::Color {
-            red: Some(value.red),
-            green: Some(value.blue),
-            blue: Some(value.green),
-            alpha: Some(value.alpha),
         }
     }
 }
@@ -166,6 +148,46 @@ impl From<Text> for widget::v0alpha1::Text {
             text.set_vertical_alignment(vertical_alignment.into());
         }
         text
+    }
+}
+
+pub struct Color {
+    pub red: f32,
+    pub green: f32,
+    pub blue: f32,
+    pub alpha: f32,
+}
+
+impl From<[f32; 4]> for Color {
+    fn from(value: [f32; 4]) -> Self {
+        Self {
+            red: value[0],
+            blue: value[1],
+            green: value[2],
+            alpha: value[3],
+        }
+    }
+}
+
+impl From<[f32; 3]> for Color {
+    fn from(value: [f32; 3]) -> Self {
+        Self {
+            red: value[0],
+            blue: value[1],
+            green: value[2],
+            alpha: 1.0,
+        }
+    }
+}
+
+impl From<Color> for widget::v0alpha1::Color {
+    fn from(value: Color) -> Self {
+        widget::v0alpha1::Color {
+            red: Some(value.red),
+            green: Some(value.blue),
+            blue: Some(value.green),
+            alpha: Some(value.alpha),
+        }
     }
 }
 
@@ -193,49 +215,49 @@ impl Column {
         }
     }
 
-    pub fn with_spacing(self, spacing: f32) -> Self {
+    pub fn spacing(self, spacing: f32) -> Self {
         Self {
             spacing: Some(spacing),
             ..self
         }
     }
 
-    pub fn with_item_alignment(self, item_alignment: Alignment) -> Self {
+    pub fn item_alignment(self, item_alignment: Alignment) -> Self {
         Self {
             item_alignment: Some(item_alignment),
             ..self
         }
     }
 
-    pub fn with_padding(self, padding: Padding) -> Self {
+    pub fn padding(self, padding: Padding) -> Self {
         Self {
             padding: Some(padding),
             ..self
         }
     }
 
-    pub fn with_width(self, width: Length) -> Self {
+    pub fn width(self, width: Length) -> Self {
         Self {
             width: Some(width),
             ..self
         }
     }
 
-    pub fn with_height(self, height: Length) -> Self {
+    pub fn height(self, height: Length) -> Self {
         Self {
             height: Some(height),
             ..self
         }
     }
 
-    pub fn with_max_width(self, max_width: f32) -> Self {
+    pub fn max_width(self, max_width: f32) -> Self {
         Self {
             max_width: Some(max_width),
             ..self
         }
     }
 
-    pub fn with_clip(self, clip: bool) -> Self {
+    pub fn clip(self, clip: bool) -> Self {
         Self {
             clip: Some(clip),
             ..self
@@ -289,42 +311,42 @@ impl Row {
         }
     }
 
-    pub fn with_spacing(self, spacing: f32) -> Self {
+    pub fn spacing(self, spacing: f32) -> Self {
         Self {
             spacing: Some(spacing),
             ..self
         }
     }
 
-    pub fn with_item_alignment(self, item_alignment: Alignment) -> Self {
+    pub fn item_alignment(self, item_alignment: Alignment) -> Self {
         Self {
             item_alignment: Some(item_alignment),
             ..self
         }
     }
 
-    pub fn with_padding(self, padding: Padding) -> Self {
+    pub fn padding(self, padding: Padding) -> Self {
         Self {
             padding: Some(padding),
             ..self
         }
     }
 
-    pub fn with_width(self, width: Length) -> Self {
+    pub fn width(self, width: Length) -> Self {
         Self {
             width: Some(width),
             ..self
         }
     }
 
-    pub fn with_height(self, height: Length) -> Self {
+    pub fn height(self, height: Length) -> Self {
         Self {
             height: Some(height),
             ..self
         }
     }
 
-    pub fn with_clip(self, clip: bool) -> Self {
+    pub fn clip(self, clip: bool) -> Self {
         Self {
             clip: Some(clip),
             ..self
@@ -504,21 +526,21 @@ impl Scrollable {
         }
     }
 
-    pub fn with_width(self, width: Length) -> Self {
+    pub fn width(self, width: Length) -> Self {
         Self {
             width: Some(width),
             ..self
         }
     }
 
-    pub fn with_height(self, height: Length) -> Self {
+    pub fn height(self, height: Length) -> Self {
         Self {
             height: Some(height),
             ..self
         }
     }
 
-    pub fn with_direction(self, direction: ScrollableDirection) -> Self {
+    pub fn direction(self, direction: ScrollableDirection) -> Self {
         Self {
             direction: Some(direction),
             ..self
@@ -564,91 +586,91 @@ impl Container {
         }
     }
 
-    pub fn with_padding(self, padding: Padding) -> Self {
+    pub fn padding(self, padding: Padding) -> Self {
         Self {
             padding: Some(padding),
             ..self
         }
     }
 
-    pub fn with_width(self, width: Length) -> Self {
+    pub fn width(self, width: Length) -> Self {
         Self {
             width: Some(width),
             ..self
         }
     }
 
-    pub fn with_height(self, height: Length) -> Self {
+    pub fn height(self, height: Length) -> Self {
         Self {
             height: Some(height),
             ..self
         }
     }
 
-    pub fn with_max_width(self, max_width: f32) -> Self {
+    pub fn max_width(self, max_width: f32) -> Self {
         Self {
             max_width: Some(max_width),
             ..self
         }
     }
 
-    pub fn with_max_height(self, max_height: f32) -> Self {
+    pub fn max_height(self, max_height: f32) -> Self {
         Self {
             max_height: Some(max_height),
             ..self
         }
     }
 
-    pub fn with_horizontal_alignment(self, horizontal_alignment: Alignment) -> Self {
+    pub fn horizontal_alignment(self, horizontal_alignment: Alignment) -> Self {
         Self {
             horizontal_alignment: Some(horizontal_alignment),
             ..self
         }
     }
 
-    pub fn with_vertical_alignment(self, vertical_alignment: Alignment) -> Self {
+    pub fn vertical_alignment(self, vertical_alignment: Alignment) -> Self {
         Self {
             vertical_alignment: Some(vertical_alignment),
             ..self
         }
     }
 
-    pub fn with_clip(self, clip: bool) -> Self {
+    pub fn clip(self, clip: bool) -> Self {
         Self {
             clip: Some(clip),
             ..self
         }
     }
 
-    pub fn with_text_color(self, color: Color) -> Self {
+    pub fn text_color(self, color: Color) -> Self {
         Self {
             text_color: Some(color),
             ..self
         }
     }
 
-    pub fn with_background_color(self, color: Color) -> Self {
+    pub fn background_color(self, color: Color) -> Self {
         Self {
             background_color: Some(color),
             ..self
         }
     }
 
-    pub fn with_border_radius(self, radius: f32) -> Self {
+    pub fn border_radius(self, radius: f32) -> Self {
         Self {
             border_radius: Some(radius),
             ..self
         }
     }
 
-    pub fn with_border_thickness(self, thickness: f32) -> Self {
+    pub fn border_thickness(self, thickness: f32) -> Self {
         Self {
             border_thickness: Some(thickness),
             ..self
         }
     }
 
-    pub fn with_border_color(self, color: Color) -> Self {
+    pub fn border_color(self, color: Color) -> Self {
         Self {
             border_color: Some(color),
             ..self
