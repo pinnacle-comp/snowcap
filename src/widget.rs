@@ -115,6 +115,7 @@ fn widget_def_to_fn_inner(
                 horizontal_alignment: _,
                 vertical_alignment: _,
                 color,
+                font,
             } = text_def;
 
             let f: WidgetFn = Box::new(move |_states| {
@@ -158,13 +159,9 @@ fn widget_def_to_fn_inner(
                     }
                 }
 
-                text = text.font(iced::Font {
-                    // family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
-                    family: iced::font::Family::Monospace,
-                    weight: iced::font::Weight::Semibold,
-                    stretch: iced::font::Stretch::Normal,
-                    style: iced::font::Style::Normal,
-                });
+                if let Some(font) = font.clone() {
+                    text = text.font(iced::Font::from_api(font));
+                }
 
                 text.into()
             });

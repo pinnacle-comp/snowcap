@@ -1,6 +1,7 @@
-use snowcap_api_defs::snowcap::widget;
+pub mod font;
 
-use crate::util::IntoApi;
+use font::Font;
+use snowcap_api_defs::snowcap::widget;
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
 pub struct WidgetId(u32);
@@ -17,6 +18,7 @@ impl From<u32> for WidgetId {
     }
 }
 
+#[derive(from_variants::FromVariants)]
 pub enum WidgetDef {
     Text(Text),
     Column(Column),
@@ -25,58 +27,9 @@ pub enum WidgetDef {
     Container(Box<Container>),
 }
 
-impl IntoApi for WidgetDef {
-    type ApiType = widget::v0alpha1::WidgetDef;
-    fn into_api(self) -> widget::v0alpha1::WidgetDef {
-        widget::v0alpha1::WidgetDef {
-            widget: Some(match self {
-                WidgetDef::Text(text) => {
-                    widget::v0alpha1::widget_def::Widget::Text(text.into_api())
-                }
-                WidgetDef::Column(column) => {
-                    widget::v0alpha1::widget_def::Widget::Column(column.into_api())
-                }
-                WidgetDef::Row(row) => widget::v0alpha1::widget_def::Widget::Row(row.into_api()),
-                WidgetDef::Scrollable(scrollable) => {
-                    widget::v0alpha1::widget_def::Widget::Scrollable(Box::new(
-                        scrollable.into_api(),
-                    ))
-                }
-                WidgetDef::Container(container) => {
-                    widget::v0alpha1::widget_def::Widget::Container(Box::new(container.into_api()))
-                }
-            }),
-        }
-    }
-}
-
-impl From<Text> for WidgetDef {
-    fn from(value: Text) -> Self {
-        Self::Text(value)
-    }
-}
-
-impl From<Column> for WidgetDef {
-    fn from(value: Column) -> Self {
-        Self::Column(value)
-    }
-}
-
-impl From<Row> for WidgetDef {
-    fn from(value: Row) -> Self {
-        Self::Row(value)
-    }
-}
-
 impl From<Scrollable> for WidgetDef {
     fn from(value: Scrollable) -> Self {
         Self::Scrollable(Box::new(value))
-    }
-}
-
-impl From<Box<Scrollable>> for WidgetDef {
-    fn from(value: Box<Scrollable>) -> Self {
-        Self::Scrollable(value)
     }
 }
 
@@ -86,9 +39,23 @@ impl From<Container> for WidgetDef {
     }
 }
 
-impl From<Box<Container>> for WidgetDef {
-    fn from(value: Box<Container>) -> Self {
-        Self::Container(value)
+impl From<WidgetDef> for widget::v0alpha1::WidgetDef {
+    fn from(value: WidgetDef) -> widget::v0alpha1::WidgetDef {
+        widget::v0alpha1::WidgetDef {
+            widget: Some(match value {
+                WidgetDef::Text(text) => widget::v0alpha1::widget_def::Widget::Text(text.into()),
+                WidgetDef::Column(column) => {
+                    widget::v0alpha1::widget_def::Widget::Column(column.into())
+                }
+                WidgetDef::Row(row) => widget::v0alpha1::widget_def::Widget::Row(row.into()),
+                WidgetDef::Scrollable(scrollable) => {
+                    widget::v0alpha1::widget_def::Widget::Scrollable(Box::new((*scrollable).into()))
+                }
+                WidgetDef::Container(container) => {
+                    widget::v0alpha1::widget_def::Widget::Container(Box::new((*container).into()))
+                }
+            }),
+        }
     }
 }
 
@@ -101,6 +68,7 @@ pub struct Text {
     pub horizontal_alignment: Option<Alignment>,
     pub vertical_alignment: Option<Alignment>,
     pub color: Option<Color>,
+    pub font: Option<Font>,
 }
 
 impl Text {
@@ -152,6 +120,13 @@ impl Text {
             ..self
         }
     }
+
+    pub fn with_font(self, font: Font) -> Self {
+        Self {
+            font: Some(font),
+            ..self
+        }
+    }
 }
 
 pub struct Color {
@@ -161,37 +136,34 @@ pub struct Color {
     pub alpha: f32,
 }
 
-impl IntoApi for Color {
-    type ApiType = widget::v0alpha1::Color;
-
-    fn into_api(self) -> Self::ApiType {
+impl From<Color> for widget::v0alpha1::Color {
+    fn from(value: Color) -> Self {
         widget::v0alpha1::Color {
-            red: Some(self.red),
-            green: Some(self.blue),
-            blue: Some(self.green),
-            alpha: Some(self.alpha),
+            red: Some(value.red),
+            green: Some(value.blue),
+            blue: Some(value.green),
+            alpha: Some(value.alpha),
         }
     }
 }
 
-impl IntoApi for Text {
-    type ApiType = widget::v0alpha1::Text;
-
-    fn into_api(self) -> Self::ApiType {
+impl From<Text> for widget::v0alpha1::Text {
+    fn from(value: Text) -> Self {
         let mut text = widget::v0alpha1::Text {
-            text: Some(self.text),
-            pixels: self.size,
-            width: self.width.map(IntoApi::into_api),
-            height: self.height.map(IntoApi::into_api),
+            text: Some(value.text),
+            pixels: value.size,
+            width: value.width.map(From::from),
+            height: value.height.map(From::from),
             horizontal_alignment: None,
             vertical_alignment: None,
-            color: self.color.map(IntoApi::into_api),
+            color: value.color.map(From::from),
+            font: value.font.map(From::from),
         };
-        if let Some(horizontal_alignment) = self.horizontal_alignment {
-            text.set_horizontal_alignment(horizontal_alignment.into_api());
+        if let Some(horizontal_alignment) = value.horizontal_alignment {
+            text.set_horizontal_alignment(horizontal_alignment.into());
         }
-        if let Some(vertical_alignment) = self.vertical_alignment {
-            text.set_vertical_alignment(vertical_alignment.into_api());
+        if let Some(vertical_alignment) = value.vertical_alignment {
+            text.set_vertical_alignment(vertical_alignment.into());
         }
         text
     }
@@ -277,19 +249,19 @@ impl Column {
     }
 }
 
-impl IntoApi for Column {
-    type ApiType = widget::v0alpha1::Column;
-
-    fn into_api(self) -> Self::ApiType {
+impl From<Column> for widget::v0alpha1::Column {
+    fn from(value: Column) -> Self {
         widget::v0alpha1::Column {
-            spacing: self.spacing,
-            padding: self.padding.map(IntoApi::into_api),
-            item_alignment: self.item_alignment.map(|it| it.into_api() as i32),
-            width: self.width.map(IntoApi::into_api),
-            height: self.height.map(IntoApi::into_api),
-            max_width: self.max_width,
-            clip: self.clip,
-            children: self.children.into_iter().map(IntoApi::into_api).collect(),
+            spacing: value.spacing,
+            padding: value.padding.map(From::from),
+            item_alignment: value
+                .item_alignment
+                .map(|it| widget::v0alpha1::Alignment::from(it) as i32),
+            width: value.width.map(From::from),
+            height: value.height.map(From::from),
+            max_width: value.max_width,
+            clip: value.clip,
+            children: value.children.into_iter().map(From::from).collect(),
         }
     }
 }
@@ -366,18 +338,18 @@ impl Row {
     }
 }
 
-impl IntoApi for Row {
-    type ApiType = widget::v0alpha1::Row;
-
-    fn into_api(self) -> Self::ApiType {
+impl From<Row> for widget::v0alpha1::Row {
+    fn from(value: Row) -> Self {
         widget::v0alpha1::Row {
-            spacing: self.spacing,
-            padding: self.padding.map(IntoApi::into_api),
-            item_alignment: self.item_alignment.map(|it| it.into_api() as i32),
-            width: self.width.map(IntoApi::into_api),
-            height: self.height.map(IntoApi::into_api),
-            clip: self.clip,
-            children: self.children.into_iter().map(IntoApi::into_api).collect(),
+            spacing: value.spacing,
+            padding: value.padding.map(From::from),
+            item_alignment: value
+                .item_alignment
+                .map(|it| widget::v0alpha1::Alignment::from(it) as i32),
+            width: value.width.map(From::from),
+            height: value.height.map(From::from),
+            clip: value.clip,
+            children: value.children.into_iter().map(From::from).collect(),
         }
     }
 }
@@ -389,15 +361,13 @@ pub struct Padding {
     pub left: f32,
 }
 
-impl IntoApi for Padding {
-    type ApiType = widget::v0alpha1::Padding;
-
-    fn into_api(self) -> Self::ApiType {
+impl From<Padding> for widget::v0alpha1::Padding {
+    fn from(value: Padding) -> Self {
         widget::v0alpha1::Padding {
-            top: Some(self.top),
-            right: Some(self.right),
-            bottom: Some(self.bottom),
-            left: Some(self.left),
+            top: Some(value.top),
+            right: Some(value.right),
+            bottom: Some(value.bottom),
+            left: Some(value.left),
         }
     }
 }
@@ -408,11 +378,9 @@ pub enum Alignment {
     End,
 }
 
-impl IntoApi for Alignment {
-    type ApiType = widget::v0alpha1::Alignment;
-
-    fn into_api(self) -> Self::ApiType {
-        match self {
+impl From<Alignment> for widget::v0alpha1::Alignment {
+    fn from(value: Alignment) -> Self {
+        match value {
             Alignment::Start => widget::v0alpha1::Alignment::Start,
             Alignment::Center => widget::v0alpha1::Alignment::Center,
             Alignment::End => widget::v0alpha1::Alignment::End,
@@ -427,12 +395,10 @@ pub enum Length {
     Fixed(f32),
 }
 
-impl IntoApi for Length {
-    type ApiType = widget::v0alpha1::Length;
-
-    fn into_api(self) -> Self::ApiType {
+impl From<Length> for widget::v0alpha1::Length {
+    fn from(value: Length) -> Self {
         widget::v0alpha1::Length {
-            strategy: Some(match self {
+            strategy: Some(match value {
                 Length::Fill => widget::v0alpha1::length::Strategy::Fill(()),
                 Length::FillPortion(portion) => {
                     widget::v0alpha1::length::Strategy::FillPortion(portion as u32)
@@ -453,25 +419,23 @@ pub enum ScrollableDirection {
     },
 }
 
-impl IntoApi for ScrollableDirection {
-    type ApiType = widget::v0alpha1::ScrollableDirection;
-
-    fn into_api(self) -> Self::ApiType {
-        match self {
+impl From<ScrollableDirection> for widget::v0alpha1::ScrollableDirection {
+    fn from(value: ScrollableDirection) -> Self {
+        match value {
             ScrollableDirection::Vertical(props) => widget::v0alpha1::ScrollableDirection {
-                vertical: Some(props.into_api()),
+                vertical: Some(props.into()),
                 horizontal: None,
             },
             ScrollableDirection::Horizontal(props) => widget::v0alpha1::ScrollableDirection {
                 vertical: None,
-                horizontal: Some(props.into_api()),
+                horizontal: Some(props.into()),
             },
             ScrollableDirection::Both {
                 vertical,
                 horizontal,
             } => widget::v0alpha1::ScrollableDirection {
-                vertical: Some(vertical.into_api()),
-                horizontal: Some(horizontal.into_api()),
+                vertical: Some(vertical.into()),
+                horizontal: Some(horizontal.into()),
             },
         }
     }
@@ -482,11 +446,9 @@ pub enum ScrollableAlignment {
     End,
 }
 
-impl IntoApi for ScrollableAlignment {
-    type ApiType = widget::v0alpha1::ScrollableAlignment;
-
-    fn into_api(self) -> Self::ApiType {
-        match self {
+impl From<ScrollableAlignment> for widget::v0alpha1::ScrollableAlignment {
+    fn from(value: ScrollableAlignment) -> Self {
+        match value {
             ScrollableAlignment::Start => widget::v0alpha1::ScrollableAlignment::Start,
             ScrollableAlignment::End => widget::v0alpha1::ScrollableAlignment::End,
         }
@@ -501,15 +463,15 @@ pub struct ScrollableProperties {
     pub alignment: Option<ScrollableAlignment>,
 }
 
-impl IntoApi for ScrollableProperties {
-    type ApiType = widget::v0alpha1::ScrollableProperties;
-
-    fn into_api(self) -> Self::ApiType {
+impl From<ScrollableProperties> for widget::v0alpha1::ScrollableProperties {
+    fn from(value: ScrollableProperties) -> Self {
         widget::v0alpha1::ScrollableProperties {
-            width: self.width,
-            margin: self.margin,
-            scroller_width: self.scroller_width,
-            alignment: self.alignment.map(|it| it.into_api() as i32),
+            width: value.width,
+            margin: value.margin,
+            scroller_width: value.scroller_width,
+            alignment: value
+                .alignment
+                .map(|it| widget::v0alpha1::ScrollableAlignment::from(it) as i32),
         }
     }
 }
@@ -521,15 +483,13 @@ pub struct Scrollable {
     pub child: WidgetDef,
 }
 
-impl IntoApi for Scrollable {
-    type ApiType = widget::v0alpha1::Scrollable;
-
-    fn into_api(self) -> Self::ApiType {
+impl From<Scrollable> for widget::v0alpha1::Scrollable {
+    fn from(value: Scrollable) -> Self {
         widget::v0alpha1::Scrollable {
-            width: self.width.map(IntoApi::into_api),
-            height: self.height.map(IntoApi::into_api),
-            direction: self.direction.map(IntoApi::into_api),
-            child: Some(Box::new(self.child.into_api())),
+            width: value.width.map(From::from),
+            height: value.height.map(From::from),
+            direction: value.direction.map(From::from),
+            child: Some(Box::new(value.child.into())),
         }
     }
 }
@@ -696,25 +656,27 @@ impl Container {
     }
 }
 
-impl IntoApi for Container {
-    type ApiType = widget::v0alpha1::Container;
-
-    fn into_api(self) -> Self::ApiType {
+impl From<Container> for widget::v0alpha1::Container {
+    fn from(value: Container) -> Self {
         widget::v0alpha1::Container {
-            padding: self.padding.map(IntoApi::into_api),
-            width: self.width.map(IntoApi::into_api),
-            height: self.height.map(IntoApi::into_api),
-            max_width: self.max_width,
-            max_height: self.max_height,
-            horizontal_alignment: self.horizontal_alignment.map(|it| it.into_api() as i32),
-            vertical_alignment: self.vertical_alignment.map(|it| it.into_api() as i32),
-            clip: self.clip,
-            child: Some(Box::new(self.child.into_api())),
-            text_color: self.text_color.map(IntoApi::into_api),
-            background_color: self.background_color.map(IntoApi::into_api),
-            border_radius: self.border_radius,
-            border_thickness: self.border_thickness,
-            border_color: self.border_color.map(IntoApi::into_api),
+            padding: value.padding.map(From::from),
+            width: value.width.map(From::from),
+            height: value.height.map(From::from),
+            max_width: value.max_width,
+            max_height: value.max_height,
+            horizontal_alignment: value
+                .horizontal_alignment
+                .map(|it| widget::v0alpha1::Alignment::from(it) as i32),
+            vertical_alignment: value
+                .vertical_alignment
+                .map(|it| widget::v0alpha1::Alignment::from(it) as i32),
+            clip: value.clip,
+            child: Some(Box::new(value.child.into())),
+            text_color: value.text_color.map(From::from),
+            background_color: value.background_color.map(From::from),
+            border_radius: value.border_radius,
+            border_thickness: value.border_thickness,
+            border_color: value.border_color.map(From::from),
         }
     }
 }

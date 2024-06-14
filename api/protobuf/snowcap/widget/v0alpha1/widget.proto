@@ -34,6 +34,57 @@ message Color {
   optional float alpha = 4;
 }
 
+message Font {
+  message Family {
+    oneof family {
+      string name = 1;
+      google.protobuf.Empty serif = 2;
+      google.protobuf.Empty sans_serif = 3;
+      google.protobuf.Empty cursive = 4;
+      google.protobuf.Empty fantasy = 5;
+      google.protobuf.Empty monospace = 6;
+    }
+  }
+
+  enum Weight {
+    WEIGHT_UNSPECIFIED = 0;
+    WEIGHT_THIN = 1;
+    WEIGHT_EXTRA_LIGHT = 2;
+    WEIGHT_LIGHT = 3;
+    WEIGHT_NORMAL = 4;
+    WEIGHT_MEDIUM = 5;
+    WEIGHT_SEMIBOLD = 6;
+    WEIGHT_BOLD = 7;
+    WEIGHT_EXTRA_BOLD = 8;
+    WEIGHT_BLACK = 9;
+  }
+
+  enum Stretch {
+    STRETCH_UNSPECIFIED = 0;
+    STRETCH_ULTRA_CONDENSED = 1;
+    STRETCH_EXTRA_CONDENSED = 2;
+    STRETCH_CONDENSED = 3;
+    STRETCH_SEMI_CONDENSED = 4;
+    STRETCH_NORMAL = 5;
+    STRETCH_SEMI_EXPANDED = 6;
+    STRETCH_EXPANDED = 7;
+    STRETCH_EXTRA_EXPANDED = 8;
+    STRETCH_ULTRA_EXPANDED = 9;
+  }
+
+  enum Style {
+    STYLE_UNSPECIFIED = 0;
+    STYLE_NORMAL = 1;
+    STYLE_ITALIC = 2;
+    STYLE_OBLIQUE = 3;
+  }
+
+  optional Family family = 1;
+  optional Weight weight = 2;
+  optional Stretch stretch = 3;
+  optional Style style = 4;
+}
+
 
 message WidgetDef {
   oneof widget {
@@ -53,6 +104,7 @@ message Text {
   optional Alignment horizontal_alignment = 5;
   optional Alignment vertical_alignment = 6;
   optional Color color = 7;
+  optional Font font = 8;
 }
 
 message Column {

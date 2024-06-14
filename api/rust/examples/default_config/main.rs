@@ -1,6 +1,9 @@
 use snowcap_api::{
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
-    widget::{Alignment, Color, Column, Container, Length, Padding, Row, Text},
+    widget::{
+        font::{Family, Font, Weight},
+        Alignment, Color, Column, Container, Length, Padding, Row, Text,
+    },
 };
 
 #[tokio::main]
@@ -29,6 +32,12 @@ async fn main() {
                     Text::new(desc)
                         .with_horizontal_alignment(Alignment::End)
                         .with_width(Length::Fill)
+                        .with_font(
+                            Font::new_with_family(Family::Name(
+                                "JetBrainsMono Nerd Font".to_string(),
+                            ))
+                            .weight(Weight::Semibold),
+                        )
                         .into()
                 })
                 .chain([Row::new_with_children([

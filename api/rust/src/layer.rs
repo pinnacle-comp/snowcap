@@ -15,7 +15,6 @@ use xkbcommon::xkb::Keysym;
 use crate::{
     block_on_tokio,
     input::Modifiers,
-    util::IntoApi,
     widget::{WidgetDef, WidgetId},
 };
 
@@ -124,7 +123,7 @@ impl Layer {
         let mut client = self.client.clone();
 
         let response = block_on_tokio(client.new_layer(NewLayerRequest {
-            widget_def: Some(widget.into_api()),
+            widget_def: Some(widget.into()),
             width: Some(width),
             height: Some(height),
             anchor: anchor.map(|anchor| layer::v0alpha1::Anchor::from(anchor) as i32),

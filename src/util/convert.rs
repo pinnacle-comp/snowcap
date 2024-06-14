@@ -110,3 +110,96 @@ impl FromApi for iced::Color {
         }
     }
 }
+
+impl FromApi for iced::font::Family {
+    type ApiType = widget::v0alpha1::font::Family;
+
+    fn from_api(api_type: Self::ApiType) -> Self {
+        match api_type.family {
+            Some(family) => match family {
+                widget::v0alpha1::font::family::Family::Name(name) => {
+                    iced::font::Family::Name(name.leak()) // why does this take &'static str
+                }
+                widget::v0alpha1::font::family::Family::Serif(_) => iced::font::Family::Serif,
+                widget::v0alpha1::font::family::Family::SansSerif(_) => {
+                    iced::font::Family::SansSerif
+                }
+                widget::v0alpha1::font::family::Family::Cursive(_) => iced::font::Family::Cursive,
+                widget::v0alpha1::font::family::Family::Fantasy(_) => iced::font::Family::Fantasy,
+                widget::v0alpha1::font::family::Family::Monospace(_) => {
+                    iced::font::Family::Monospace
+                }
+            },
+            None => Default::default(),
+        }
+    }
+}
+
+impl FromApi for iced::font::Weight {
+    type ApiType = widget::v0alpha1::font::Weight;
+
+    fn from_api(api_type: Self::ApiType) -> Self {
+        match api_type {
+            widget::v0alpha1::font::Weight::Unspecified => Default::default(),
+            widget::v0alpha1::font::Weight::Thin => iced::font::Weight::Thin,
+            widget::v0alpha1::font::Weight::ExtraLight => iced::font::Weight::ExtraLight,
+            widget::v0alpha1::font::Weight::Light => iced::font::Weight::Light,
+            widget::v0alpha1::font::Weight::Normal => iced::font::Weight::Normal,
+            widget::v0alpha1::font::Weight::Medium => iced::font::Weight::Medium,
+            widget::v0alpha1::font::Weight::Semibold => iced::font::Weight::Semibold,
+            widget::v0alpha1::font::Weight::Bold => iced::font::Weight::Bold,
+            widget::v0alpha1::font::Weight::ExtraBold => iced::font::Weight::ExtraBold,
+            widget::v0alpha1::font::Weight::Black => iced::font::Weight::Black,
+        }
+    }
+}
+
+impl FromApi for iced::font::Stretch {
+    type ApiType = widget::v0alpha1::font::Stretch;
+
+    fn from_api(api_type: Self::ApiType) -> Self {
+        match api_type {
+            widget::v0alpha1::font::Stretch::Unspecified => Default::default(),
+            widget::v0alpha1::font::Stretch::UltraCondensed => iced::font::Stretch::UltraCondensed,
+            widget::v0alpha1::font::Stretch::ExtraCondensed => iced::font::Stretch::ExtraCondensed,
+            widget::v0alpha1::font::Stretch::Condensed => iced::font::Stretch::Condensed,
+            widget::v0alpha1::font::Stretch::SemiCondensed => iced::font::Stretch::SemiCondensed,
+            widget::v0alpha1::font::Stretch::Normal => iced::font::Stretch::Normal,
+            widget::v0alpha1::font::Stretch::SemiExpanded => iced::font::Stretch::SemiExpanded,
+            widget::v0alpha1::font::Stretch::Expanded => iced::font::Stretch::Expanded,
+            widget::v0alpha1::font::Stretch::ExtraExpanded => iced::font::Stretch::ExtraExpanded,
+            widget::v0alpha1::font::Stretch::UltraExpanded => iced::font::Stretch::UltraExpanded,
+        }
+    }
+}
+
+impl FromApi for iced::font::Style {
+    type ApiType = widget::v0alpha1::font::Style;
+
+    fn from_api(api_type: Self::ApiType) -> Self {
+        match api_type {
+            widget::v0alpha1::font::Style::Unspecified => Default::default(),
+            widget::v0alpha1::font::Style::Normal => iced::font::Style::Normal,
+            widget::v0alpha1::font::Style::Italic => iced::font::Style::Italic,
+            widget::v0alpha1::font::Style::Oblique => iced::font::Style::Oblique,
+        }
+    }
+}
+
+impl FromApi for iced::Font {
+    type ApiType = widget::v0alpha1::Font;
+
+    fn from_api(api_type: Self::ApiType) -> Self {
+        let weight = FromApi::from_api(api_type.weight());
+        let stretch = FromApi::from_api(api_type.stretch());
+        let style = FromApi::from_api(api_type.style());
+        let family = api_type.family.map(FromApi::from_api).unwrap_or_default();
+
+        iced::Font {
+            family,
+            weight,
+            stretch,
+            style,
+        }
+    }
+}
