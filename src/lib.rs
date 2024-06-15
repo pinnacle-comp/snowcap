@@ -71,6 +71,7 @@ pub fn start(kill_ping: Option<calloop::ping::PingSource>, ready_flag: Arc<Atomi
                         .layer
                         .wl_surface()
                         .frame(&state.queue_handle, layer.layer.wl_surface().clone());
+                    layer.layer.commit();
                 }
             }
         })
