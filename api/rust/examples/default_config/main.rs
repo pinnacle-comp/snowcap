@@ -74,7 +74,7 @@ async fn main() {
 
     layer
         .new_widget(
-            widget.into(),
+            widget,
             400,
             500,
             None,

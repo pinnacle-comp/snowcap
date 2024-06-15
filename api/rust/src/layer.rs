@@ -18,6 +18,7 @@ use crate::{
     widget::{WidgetDef, WidgetId},
 };
 
+#[derive(Clone, Debug)]
 pub struct Layer {
     client: LayerServiceClient<Channel>,
     input_client: InputServiceClient<Channel>,
@@ -25,6 +26,7 @@ pub struct Layer {
 }
 
 // TODO: change to bitflag
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Anchor {
     Top,
     Bottom,
@@ -51,6 +53,7 @@ impl From<Anchor> for layer::v0alpha1::Anchor {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum KeyboardInteractivity {
     None,
     OnDemand,
@@ -67,6 +70,7 @@ impl From<KeyboardInteractivity> for layer::v0alpha1::KeyboardInteractivity {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ExclusiveZone {
     Exclusive(NonZeroU32),
     Respect,
@@ -83,6 +87,7 @@ impl From<ExclusiveZone> for i32 {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ZLayer {
     Background,
     Bottom,
@@ -112,7 +117,7 @@ impl Layer {
 
     pub fn new_widget(
         &self,
-        widget: WidgetDef,
+        widget: impl Into<WidgetDef>,
         width: u32,
         height: u32,
         anchor: Option<Anchor>,
@@ -123,7 +128,7 @@ impl Layer {
         let mut client = self.client.clone();
 
         let response = block_on_tokio(client.new_layer(NewLayerRequest {
-            widget_def: Some(widget.into()),
+            widget_def: Some(widget.into().into()),
             width: Some(width),
             height: Some(height),
             anchor: anchor.map(|anchor| layer::v0alpha1::Anchor::from(anchor) as i32),

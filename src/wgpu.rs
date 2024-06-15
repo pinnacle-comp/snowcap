@@ -1,12 +1,18 @@
 use std::sync::Arc;
 
 use anyhow::Context;
+use iced_wgpu::graphics::backend::Text;
 use iced_wgpu::{
     wgpu::{self, Backends},
     Backend,
 };
 
 use crate::block_on_tokio;
+
+const UBUNTU_REGULAR: &[u8] = include_bytes!("../resources/fonts/Ubuntu-Regular.ttf");
+const UBUNTU_BOLD: &[u8] = include_bytes!("../resources/fonts/Ubuntu-Bold.ttf");
+const UBUNTU_ITALIC: &[u8] = include_bytes!("../resources/fonts/Ubuntu-Italic.ttf");
+const UBUNTU_BOLD_ITALIC: &[u8] = include_bytes!("../resources/fonts/Ubuntu-BoldItalic.ttf");
 
 pub struct Wgpu {
     pub instance: Arc<wgpu::Instance>,
@@ -38,7 +44,7 @@ pub fn setup_wgpu() -> anyhow::Result<Wgpu> {
         None,
     ))?;
 
-    let backend = Backend::new(
+    let mut backend = Backend::new(
         &device,
         &queue,
         iced_wgpu::Settings {
@@ -48,6 +54,11 @@ pub fn setup_wgpu() -> anyhow::Result<Wgpu> {
         },
         wgpu::TextureFormat::Rgba8UnormSrgb,
     );
+
+    backend.load_font(UBUNTU_REGULAR.into());
+    backend.load_font(UBUNTU_BOLD.into());
+    backend.load_font(UBUNTU_ITALIC.into());
+    backend.load_font(UBUNTU_BOLD_ITALIC.into());
 
     let renderer = iced_wgpu::Renderer::new(backend, Default::default(), iced::Pixels(16.0));
 

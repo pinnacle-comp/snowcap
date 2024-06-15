@@ -18,7 +18,7 @@ impl From<u32> for WidgetId {
     }
 }
 
-#[derive(from_variants::FromVariants)]
+#[derive(Debug, Clone, PartialEq, from_variants::FromVariants)]
 pub enum WidgetDef {
     Text(Text),
     Column(Column),
@@ -59,7 +59,7 @@ impl From<WidgetDef> for widget::v0alpha1::WidgetDef {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Text {
     pub text: String,
     pub size: Option<f32>,
@@ -151,6 +151,7 @@ impl From<Text> for widget::v0alpha1::Text {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Color {
     pub red: f32,
     pub green: f32,
@@ -191,7 +192,7 @@ impl From<Color> for widget::v0alpha1::Color {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Column {
     pub spacing: Option<f32>,
     pub padding: Option<Padding>,
@@ -288,7 +289,7 @@ impl From<Column> for widget::v0alpha1::Column {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Row {
     pub spacing: Option<f32>,
     pub padding: Option<Padding>,
@@ -376,6 +377,7 @@ impl From<Row> for widget::v0alpha1::Row {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Padding {
     pub top: f32,
     pub right: f32,
@@ -394,7 +396,9 @@ impl From<Padding> for widget::v0alpha1::Padding {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub enum Alignment {
+    #[default]
     Start,
     Center,
     End,
@@ -410,7 +414,9 @@ impl From<Alignment> for widget::v0alpha1::Alignment {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Length {
+    #[default]
     Fill,
     FillPortion(u16),
     Shrink,
@@ -432,6 +438,7 @@ impl From<Length> for widget::v0alpha1::Length {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ScrollableDirection {
     Vertical(ScrollableProperties),
     Horizontal(ScrollableProperties),
@@ -463,7 +470,9 @@ impl From<ScrollableDirection> for widget::v0alpha1::ScrollableDirection {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub enum ScrollableAlignment {
+    #[default]
     Start,
     End,
 }
@@ -477,7 +486,7 @@ impl From<ScrollableAlignment> for widget::v0alpha1::ScrollableAlignment {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ScrollableProperties {
     pub width: Option<f32>,
     pub margin: Option<f32>,
@@ -498,6 +507,7 @@ impl From<ScrollableProperties> for widget::v0alpha1::ScrollableProperties {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Scrollable {
     pub width: Option<Length>,
     pub height: Option<Length>,
@@ -548,6 +558,7 @@ impl Scrollable {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Container {
     pub padding: Option<Padding>,
     pub width: Option<Length>,
