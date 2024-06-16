@@ -1,5 +1,9 @@
+//! Input types.
+
 use snowcap_api_defs::snowcap::input;
 
+/// Keyboard modifiers.
+#[allow(missing_docs)]
 #[derive(Default)]
 pub struct Modifiers {
     pub shift: bool,

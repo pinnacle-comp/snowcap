@@ -1,18 +1,27 @@
+//! Font utilities and types.
+
 use snowcap_api_defs::snowcap::widget;
 
+/// A font specification.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
 pub struct Font {
+    /// The font family.
     pub family: Family,
+    /// The font weight.
     pub weight: Weight,
+    /// The font stretch.
     pub stretch: Stretch,
+    /// The font style.
     pub style: Style,
 }
 
 impl Font {
+    /// Create a new, empty font specification.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Create a new font specification with the given family.
     pub fn new_with_family(family: Family) -> Self {
         Self {
             family,
@@ -20,18 +29,22 @@ impl Font {
         }
     }
 
+    /// Set this font's family.
     pub fn family(self, family: Family) -> Self {
         Self { family, ..self }
     }
 
+    /// Set this font's weight.
     pub fn weight(self, weight: Weight) -> Self {
         Self { weight, ..self }
     }
 
+    /// Set this font's stretch.
     pub fn stretch(self, stretch: Stretch) -> Self {
         Self { stretch, ..self }
     }
 
+    /// Set this font's style.
     pub fn style(self, style: Style) -> Self {
         Self { style, ..self }
     }
@@ -48,8 +61,11 @@ impl From<Font> for widget::v0alpha1::Font {
     }
 }
 
+/// A font family.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
 pub enum Family {
+    /// A named font, like JetBrainsMono or FreeSerif.
     Name(String),
     Serif,
     #[default]
@@ -74,6 +90,8 @@ impl From<Family> for widget::v0alpha1::font::Family {
     }
 }
 
+/// A font weight.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub enum Weight {
     Thin,
@@ -104,6 +122,8 @@ impl From<Weight> for widget::v0alpha1::font::Weight {
     }
 }
 
+/// A font stretch.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub enum Stretch {
     UltraCondensed,
@@ -134,6 +154,8 @@ impl From<Stretch> for widget::v0alpha1::font::Stretch {
     }
 }
 
+/// A font style.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub enum Style {
     #[default]

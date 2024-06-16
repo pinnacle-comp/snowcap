@@ -1,12 +1,18 @@
+//! Widget definitions.
+
+#![allow(missing_docs)] // TODO:
+
 pub mod font;
 
 use font::Font;
 use snowcap_api_defs::snowcap::widget;
 
+/// A unique identifier for a widget.
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash)]
 pub struct WidgetId(u32);
 
 impl WidgetId {
+    /// Get the raw u32.
     pub fn into_inner(self) -> u32 {
         self.0
     }
@@ -18,6 +24,8 @@ impl From<u32> for WidgetId {
     }
 }
 
+/// A widget definition.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, from_variants::FromVariants)]
 pub enum WidgetDef {
     Text(Text),
@@ -59,6 +67,7 @@ impl From<WidgetDef> for widget::v0alpha1::WidgetDef {
     }
 }
 
+/// A text widget definition.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Text {
     pub text: String,

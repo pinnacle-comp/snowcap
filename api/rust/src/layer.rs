@@ -1,3 +1,5 @@
+//! Support for layer surface widgets using `wlr-layer-shell`.
+
 use std::num::NonZeroU32;
 
 use snowcap_api_defs::snowcap::{
@@ -18,6 +20,7 @@ use crate::{
     widget::{WidgetDef, WidgetId},
 };
 
+/// The Layer API.
 #[derive(Clone, Debug)]
 pub struct Layer {
     client: LayerServiceClient<Channel>,
@@ -26,6 +29,8 @@ pub struct Layer {
 }
 
 // TODO: change to bitflag
+/// An anchor for a layer surface.
+#[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Anchor {
     Top,
@@ -53,10 +58,14 @@ impl From<Anchor> for layer::v0alpha1::Anchor {
     }
 }
 
+/// Layer surface keyboard interactivity.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum KeyboardInteractivity {
+    /// This layer surface cannot get keyboard focus.
     None,
+    /// This layer surface can get keyboard focus through the compositor's implementation.
     OnDemand,
+    /// This layer surface will take exclusive keyboard focus.
     Exclusive,
 }
 
@@ -70,10 +79,16 @@ impl From<KeyboardInteractivity> for layer::v0alpha1::KeyboardInteractivity {
     }
 }
 
+/// Layer surface behavior for exclusive zones.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ExclusiveZone {
+    /// This layer surface requests an exclusive zone of the given size.
     Exclusive(NonZeroU32),
+    /// The layer surface does not request an exclusive zone but wants to be
+    /// positioned respecting any active exclusive zones.
     Respect,
+    /// The layer surface does not request an exclusive zone and wants to be
+    /// positioned ignoring any active exclusive zones.
     Ignore,
 }
 
@@ -87,6 +102,8 @@ impl From<ExclusiveZone> for i32 {
     }
 }
 
+/// The layer on which a layer surface will be drawn.
+#[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ZLayer {
     Background,
@@ -115,6 +132,7 @@ impl Layer {
         }
     }
 
+    /// Create a new widget.
     pub fn new_widget(
         &self,
         widget: impl Into<WidgetDef>,
@@ -154,6 +172,7 @@ impl Layer {
     }
 }
 
+/// A handle to a layer surface widget.
 #[derive(Debug, Clone)]
 pub struct LayerHandle {
     id: WidgetId,
@@ -163,6 +182,7 @@ pub struct LayerHandle {
 }
 
 impl LayerHandle {
+    /// Close this layer widget.
     pub fn close(&self) {
         let mut client = self.client.clone();
         block_on_tokio(client.close(CloseRequest {
@@ -171,6 +191,7 @@ impl LayerHandle {
         .unwrap();
     }
 
+    /// Do something on key press.
     pub fn on_key_press(
         &self,
         mut on_press: impl FnMut(&LayerHandle, Keysym, Modifiers) + Send + 'static,
