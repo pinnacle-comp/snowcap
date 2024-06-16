@@ -291,7 +291,7 @@ impl SnowcapLayer {
             width: self.width * scale as u32,
             height: self.height * scale as u32,
             present_mode: iced_wgpu::wgpu::PresentMode::Mailbox,
-            desired_maximum_frame_latency: 1,
+            desired_maximum_frame_latency: 2,
             alpha_mode: iced_wgpu::wgpu::CompositeAlphaMode::PreMultiplied,
             view_formats: vec![iced_wgpu::wgpu::TextureFormat::Rgba8UnormSrgb],
         };

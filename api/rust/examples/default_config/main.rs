@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use snowcap_api::{
     layer::{ExclusiveZone, KeyboardInteractivity, ZLayer},
     widget::{

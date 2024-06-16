@@ -24,7 +24,7 @@ pub struct Wgpu {
 
 pub fn setup_wgpu() -> anyhow::Result<Wgpu> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::GL | wgpu::Backends::VULKAN,
+        backends: wgpu::Backends::VULKAN,
         ..Default::default()
     });
 
@@ -49,7 +49,7 @@ pub fn setup_wgpu() -> anyhow::Result<Wgpu> {
         &queue,
         iced_wgpu::Settings {
             present_mode: wgpu::PresentMode::Mailbox,
-            internal_backend: Backends::GL | Backends::VULKAN,
+            internal_backend: Backends::VULKAN,
             ..Default::default()
         },
         wgpu::TextureFormat::Rgba8UnormSrgb,

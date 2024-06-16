@@ -27,7 +27,7 @@ edition = "2021"
 [dependencies]
 smithay-client-toolkit = "0.19.1"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
-iced = { version = "0.12.1", features = ["wgpu", "tokio"] }
+iced = { version = "0.12.1", default-features = false, features = ["wgpu", "tokio"] }
 iced_wgpu = "0.12.1"
 iced_runtime = "0.12.1"
 iced_futures = "0.12.0"
