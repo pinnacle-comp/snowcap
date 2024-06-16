@@ -20,13 +20,12 @@ pub use xkbcommon;
 
 use std::path::PathBuf;
 
-use futures::{stream::FuturesUnordered, Future};
+use futures::Future;
 use layer::Layer;
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver},
     task::JoinHandle,
 };
-use tokio_stream::StreamExt;
 use tonic::transport::{Endpoint, Uri};
 use tower::service_fn;
 
@@ -63,17 +62,8 @@ pub async fn connect(
 
 /// Listen to Snowcap for events.
 pub async fn listen(mut recv: UnboundedReceiver<JoinHandle<()>>) {
-    let mut set = FuturesUnordered::new();
-
     loop {
-        tokio::select! {
-            handle = recv.recv() => {
-                if let Some(handle) = handle {
-                    set.push(handle);
-                }
-            }
-                _ = set.next() => ()
-        }
+        recv.recv().await;
     }
 }
 
