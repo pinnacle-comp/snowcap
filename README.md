@@ -1,7 +1,7 @@
 # Snowcap
-A soon-to-be Wayland widget system built for Pinnacle
+A very, *very* Wayland widget system built for Pinnacle
 
-Currently unusable, but hey I got something to draw on the screen!
+Currently in early development with preliminary integration into Pinnacle.
 
 ## What is Snowcap?
 Snowcap is a widget system for Wayland, made for [Pinnacle](https://github.com/pinnacle-comp/pinnacle),
