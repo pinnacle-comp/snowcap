@@ -165,10 +165,10 @@ impl CompositorHandler for State {
 
     fn transform_changed(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        surface: &WlSurface,
-        new_transform: wl_output::Transform,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _surface: &WlSurface,
+        _new_transform: wl_output::Transform,
     ) {
         // TODO:
     }

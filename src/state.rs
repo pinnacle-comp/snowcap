@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use anyhow::Context;
 use smithay_client_toolkit::{
     compositor::CompositorState,
@@ -17,16 +15,13 @@ use smithay_client_toolkit::{
     seat::{keyboard::Modifiers, SeatState},
     shell::wlr_layer::LayerShell,
 };
-use snowcap_api_defs::snowcap::input::v0alpha1::{KeyboardKeyResponse, PointerButtonResponse};
-use tokio::sync::mpsc::UnboundedSender;
-use tonic::Status;
 
 use crate::{
     handlers::keyboard::KeyboardFocus,
     layer::SnowcapLayer,
     server::GrpcServerState,
     wgpu::{setup_wgpu, Wgpu},
-    widget::{WidgetId, WidgetIdCounter},
+    widget::WidgetIdCounter,
 };
 
 pub struct State {

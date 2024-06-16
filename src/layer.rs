@@ -201,7 +201,7 @@ impl SnowcapLayer {
         device: &iced_wgpu::wgpu::Device,
         queue: &iced_wgpu::wgpu::Queue,
         renderer: &mut iced_wgpu::Renderer,
-        qh: &QueueHandle<State>,
+        _qh: &QueueHandle<State>,
     ) {
         let Ok(frame) = self.surface.get_current_texture() else {
             return;

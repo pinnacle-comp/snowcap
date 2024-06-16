@@ -17,6 +17,7 @@ xkbcommon = "0.7.0"
 
 [workspace.lints.clippy]
 too_many_arguments = "allow"
+type_complexity = "allow"
 
 [package]
 name = "snowcap"

@@ -99,7 +99,7 @@ pub fn widget_def_to_fn(def: WidgetDef) -> Option<(WidgetFn, HashMap<u32, Box<dy
 fn widget_def_to_fn_inner(
     def: WidgetDef,
     current_id: &mut u32,
-    states: &mut HashMap<u32, Box<dyn Any + Send>>,
+    _states: &mut HashMap<u32, Box<dyn Any + Send>>,
 ) -> Option<WidgetFn> {
     let def = def.widget?;
     match def {
@@ -181,7 +181,7 @@ fn widget_def_to_fn_inner(
                 .into_iter()
                 .flat_map(|def| {
                     *current_id += 1;
-                    widget_def_to_fn_inner(def, current_id, states)
+                    widget_def_to_fn_inner(def, current_id, _states)
                 })
                 .collect::<Vec<_>>();
 
@@ -241,7 +241,7 @@ fn widget_def_to_fn_inner(
                 .into_iter()
                 .flat_map(|def| {
                     *current_id += 1;
-                    widget_def_to_fn_inner(def, current_id, states)
+                    widget_def_to_fn_inner(def, current_id, _states)
                 })
                 .collect::<Vec<_>>();
 
@@ -306,7 +306,7 @@ fn widget_def_to_fn_inner(
 
             let child_widget_fn = child.and_then(|def| {
                 *current_id += 1;
-                widget_def_to_fn_inner(*def, current_id, states)
+                widget_def_to_fn_inner(*def, current_id, _states)
             });
 
             let f: WidgetFn = Box::new(move |states| {
@@ -357,7 +357,7 @@ fn widget_def_to_fn_inner(
 
             let child_widget_fn = child.and_then(|def| {
                 *current_id += 1;
-                widget_def_to_fn_inner(*def, current_id, states)
+                widget_def_to_fn_inner(*def, current_id, _states)
             });
 
             let f: WidgetFn = Box::new(move |states| {

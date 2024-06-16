@@ -4,6 +4,10 @@ use std::ffi::c_void;
 pub struct WaylandClipboard(smithay_clipboard::Clipboard);
 
 impl WaylandClipboard {
+    /// # Safety
+    ///
+    /// `display` must be a valid `*mut wl_display` pointer, and it must remain
+    /// valid for as long as `Clipboard` object is alive.
     pub unsafe fn new(display: *mut c_void) -> Self {
         Self(smithay_clipboard::Clipboard::new(display))
     }

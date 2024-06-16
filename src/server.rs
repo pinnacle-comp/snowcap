@@ -10,7 +10,7 @@ use tokio::task::JoinHandle;
 use tracing::{error, info};
 
 use crate::{
-    api::{input::InputService, LayerService, SnowcapService},
+    api::{input::InputService, LayerService},
     state::State,
 };
 
@@ -58,7 +58,7 @@ impl State {
             })
             .unwrap();
 
-        let snowcap_service = SnowcapService::new(grpc_sender.clone());
+        // let snowcap_service = SnowcapService::new(grpc_sender.clone());
         let layer_service = LayerService::new(grpc_sender.clone());
         let input_service = InputService::new(grpc_sender.clone());
 
