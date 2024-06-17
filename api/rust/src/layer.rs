@@ -209,6 +209,10 @@ impl LayerHandle {
         self.join_handle_sender
             .send(tokio::spawn(async move {
                 while let Some(Ok(response)) = stream.next().await {
+                    if !response.pressed() {
+                        continue;
+                    }
+
                     let key = Keysym::new(response.key());
                     let mods = Modifiers::from(response.modifiers.unwrap_or_default());
 
