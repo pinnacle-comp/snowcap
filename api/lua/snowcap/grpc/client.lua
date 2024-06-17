@@ -35,8 +35,6 @@ local function socket_path()
 
     local path = dir .. "/snowcap-grpc-" .. wayland_instance .. ".sock"
 
-    print(path)
-
     return path
 end
 
@@ -63,12 +61,19 @@ end
 ---@field write_chunk function
 ---@field shutdown function
 
+local _conn_success, conn = pcall(new_conn)
+if not _conn_success then
+    print(
+        "Error: failed to connect to Snowcap socket; the next Snowcap API call will crash the program"
+    )
+end
+
 ---@nodoc
 ---@class Client
 ---@field conn H2Connection
 ---@field loop CqueuesLoop
 local client = {
-    conn = new_conn(),
+    conn = conn,
     loop = require("cqueues").new(),
     version = "v0alpha1",
 }
