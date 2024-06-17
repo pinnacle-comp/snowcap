@@ -8,7 +8,8 @@ local pb = require("pb")
 
 local protobuf = {}
 
-local SNOWCAP_PROTO_DIR = (os.getenv("XDG_DATA_HOME") or os.getenv("HOME")) .. "/snowcap/protobuf"
+local SNOWCAP_PROTO_DIR = (os.getenv("XDG_DATA_HOME") or (os.getenv("HOME") .. "/.local/share"))
+    .. "/snowcap/protobuf"
 
 function protobuf.build_protos()
     local version = "v0alpha1"
