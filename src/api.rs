@@ -117,6 +117,7 @@ impl layer_service_server::LayerService for LayerService {
         let anchor = request.anchor();
         let exclusive_zone = request.exclusive_zone();
         let keyboard_interactivity = request.keyboard_interactivity();
+        let layer = request.layer();
 
         let Some(widget_def) = request.widget_def else {
             return Err(Status::invalid_argument("no widget def"));
@@ -159,6 +160,14 @@ impl layer_service_server::LayerService for LayerService {
             }
         };
 
+        let layer = match layer {
+            layer::v0alpha1::Layer::Unspecified => wlr_layer::Layer::Top,
+            layer::v0alpha1::Layer::Background => wlr_layer::Layer::Background,
+            layer::v0alpha1::Layer::Bottom => wlr_layer::Layer::Bottom,
+            layer::v0alpha1::Layer::Top => wlr_layer::Layer::Top,
+            layer::v0alpha1::Layer::Overlay => wlr_layer::Layer::Overlay,
+        };
+
         run_unary(&self.sender, move |state| {
             let Some((f, states)) = widget_def_to_fn(widget_def) else {
                 return Err(Status::invalid_argument("widget def was null"));
@@ -168,6 +177,7 @@ impl layer_service_server::LayerService for LayerService {
                 state,
                 width,
                 height,
+                layer,
                 anchor,
                 exclusive_zone,
                 keyboard_interactivity,

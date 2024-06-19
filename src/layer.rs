@@ -66,6 +66,7 @@ impl SnowcapLayer {
         state: &mut State,
         width: u32,
         height: u32,
+        layer: wlr_layer::Layer,
         anchor: Anchor,
         exclusive_zone: ExclusiveZone,
         keyboard_interactivity: wlr_layer::KeyboardInteractivity,
@@ -75,7 +76,7 @@ impl SnowcapLayer {
         let layer = state.layer_shell_state.create_layer_surface(
             &state.queue_handle,
             surface,
-            wlr_layer::Layer::Top,
+            layer,
             Some("snowcap"),
             None,
         );
