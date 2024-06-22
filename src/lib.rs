@@ -10,13 +10,7 @@ pub mod util;
 pub mod wgpu;
 pub mod widget;
 
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::time::Duration;
 
 use futures::Future;
 use server::socket_dir;
@@ -27,7 +21,18 @@ use smithay_client_toolkit::{
 use state::State;
 use tracing::info;
 
-pub fn start(kill_ping: Option<calloop::ping::PingSource>, ready_flag: Arc<AtomicBool>) {
+/// A signal for Rust integrations to stop Snowcap.
+#[derive(Debug, Clone)]
+pub struct StopSignal(calloop::ping::Ping);
+
+impl StopSignal {
+    /// Send the stop signal to Snowcap.
+    pub fn stop(&self) {
+        self.0.ping();
+    }
+}
+
+pub fn start(stop_signal_sender: Option<tokio::sync::oneshot::Sender<StopSignal>>) {
     info!("Snowcap starting up");
 
     let mut event_loop = EventLoop::<State>::try_new().unwrap();
@@ -36,19 +41,20 @@ pub fn start(kill_ping: Option<calloop::ping::PingSource>, ready_flag: Arc<Atomi
 
     state.start_grpc_server(socket_dir()).unwrap();
 
-    if let Some(kill_ping) = kill_ping {
+    if let Some(sender) = stop_signal_sender {
+        let (ping, ping_source) = calloop::ping::make_ping().unwrap();
         let loop_signal = event_loop.get_signal();
 
         event_loop
             .handle()
-            .insert_source(kill_ping, move |_, _, _| {
+            .insert_source(ping_source, move |_, _, _| {
                 loop_signal.stop();
                 loop_signal.wakeup();
             })
             .unwrap();
-    }
 
-    ready_flag.store(true, Ordering::SeqCst);
+        sender.send(StopSignal(ping)).unwrap();
+    }
 
     event_loop
         .run(Duration::from_secs(1), &mut state, |state| {
