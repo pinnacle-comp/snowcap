@@ -16,18 +16,34 @@ pub mod layer;
 pub mod snowcap;
 pub mod widget;
 
+use snowcap_api_defs::snowcap::{
+    input::v0alpha1::input_service_client::InputServiceClient,
+    layer::v0alpha1::layer_service_client::LayerServiceClient,
+};
 pub use xkbcommon;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::OnceLock, time::Duration};
 
 use futures::Future;
 use layer::Layer;
-use tokio::{
-    sync::mpsc::{unbounded_channel, UnboundedReceiver},
-    task::JoinHandle,
-};
-use tonic::transport::{Endpoint, Uri};
+use tonic::transport::{Channel, Endpoint, Uri};
 use tower::service_fn;
+
+static LAYER: OnceLock<LayerServiceClient<Channel>> = OnceLock::new();
+static INPUT: OnceLock<InputServiceClient<Channel>> = OnceLock::new();
+
+pub(crate) fn layer() -> LayerServiceClient<Channel> {
+    LAYER
+        .get()
+        .expect("grpc connection was not initialized")
+        .clone()
+}
+pub(crate) fn input() -> InputServiceClient<Channel> {
+    INPUT
+        .get()
+        .expect("grpc connection was not initialized")
+        .clone()
+}
 
 fn socket_dir() -> PathBuf {
     xdg::BaseDirectories::with_prefix("snowcap")
@@ -45,25 +61,23 @@ fn socket_name() -> String {
 /// Only one snowcap instance can be open per Wayland session.
 /// This function will search for a Snowcap socket at
 /// `$XDG_RUNTIME_DIR/$snowcap-grpc-$WAYLAND_DISPLAY.sock` and connect to it.
-pub async fn connect(
-) -> Result<(Layer, UnboundedReceiver<JoinHandle<()>>), Box<dyn std::error::Error>> {
+pub async fn connect() -> Result<Layer, Box<dyn std::error::Error>> {
     let channel = Endpoint::try_from("http://[::]:50051")?
         .connect_with_connector(service_fn(|_: Uri| {
             tokio::net::UnixStream::connect(socket_dir().join(socket_name()))
         }))
         .await?;
 
-    let (fut_sender, fut_recv) = unbounded_channel::<JoinHandle<()>>();
+    let _ = LAYER.set(LayerServiceClient::new(channel.clone()));
+    let _ = INPUT.set(InputServiceClient::new(channel.clone()));
 
-    let layer = Layer::new(channel.clone(), fut_sender.clone());
-
-    Ok((layer, fut_recv))
+    Ok(Layer)
 }
 
 /// Listen to Snowcap for events.
-pub async fn listen(mut recv: UnboundedReceiver<JoinHandle<()>>) {
+pub async fn listen() {
     loop {
-        recv.recv().await;
+        tokio::time::sleep(Duration::from_secs(u64::MAX)).await
     }
 }
 

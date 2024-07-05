@@ -10,7 +10,7 @@ use snowcap_api::{
 
 #[tokio::main]
 async fn main() {
-    let (layer, recv) = snowcap_api::connect().await.unwrap();
+    let layer = snowcap_api::connect().await.unwrap();
 
     let test_key_descs = [
         ("Super + Enter", "Open alacritty"),
@@ -92,7 +92,7 @@ async fn main() {
             }
         });
 
-    snowcap_api::listen(recv).await;
+    snowcap_api::listen().await;
 
     // let widget = layer.new_widget(...);
     //
