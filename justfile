@@ -19,7 +19,7 @@ install-protos:
     mkdir -p "{{xdg_data_dir}}"
     cp -r "{{rootdir}}/api/protobuf" "${proto_dir}"
 
-install-lua-lib:
+install-lua-lib: gen-lua-pb-defs
     #!/usr/bin/env bash
     set -euxo pipefail
     cd "{{rootdir}}/api/lua"
@@ -28,3 +28,10 @@ install-lua-lib:
 clean:
     rm -rf "{{xdg_data_dir}}"
     -luarocks remove --local snowcap-api
+
+# Generate the protobuf definitions Lua file
+gen-lua-pb-defs:
+    #!/usr/bin/env bash
+    set -euxo pipefail
+    cargo build --package lua-build
+    ./target/debug/lua-build > "./api/lua/snowcap/grpc/defs.lua"

@@ -2,6 +2,7 @@
 members = [
     "api/rust",
     "snowcap-api-defs",
+    "api/lua/build"
 ]
 
 [workspace.dependencies]
