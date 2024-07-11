@@ -23,11 +23,13 @@ install-lua-lib: gen-lua-pb-defs
     #!/usr/bin/env bash
     set -euxo pipefail
     cd "{{rootdir}}/api/lua"
-    luarocks make --local --lua-version "{{lua_version}}"
+    luarocks build --local https://raw.githubusercontent.com/pinnacle-comp/lua-grpc-client/main/lua-grpc-client-dev-1.rockspec
+    luarocks build --local --lua-version "{{lua_version}}"
 
 clean:
     rm -rf "{{xdg_data_dir}}"
     -luarocks remove --local snowcap-api
+    -luarocks remove --local lua-grpc-client
 
 # Generate the protobuf definitions Lua file
 gen-lua-pb-defs:
