@@ -2,13 +2,10 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-local client_inner = nil
-
 local client = {
-    ---@type fun(): grpc_client.Client
-    client = function()
-        return client_inner
-    end,
+    ---@type grpc_client.Client
+    ---@diagnostic disable-next-line: missing-fields
+    client = {},
 }
 
 local function socket_path()
@@ -26,9 +23,11 @@ local function socket_path()
 end
 
 function client.connect()
-    client_inner = require("grpc_client").new({
+    local c = require("grpc_client").new({
         path = socket_path(),
     })
+
+    setmetatable(client.client, { __index = c })
 end
 
 return client

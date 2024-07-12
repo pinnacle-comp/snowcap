@@ -97,37 +97,33 @@ function layer.new_widget(args)
     }
 
     ---@type snowcap.layer.v0alpha1.NewLayerResponse
-    local response = client():unary_request(layer_service.NewLayer, request)
+    local response = client:unary_request(layer_service.NewLayer, request)
     return layer_handle.new(response.layer_id or 0) -- TODO: what to do if nil?
 end
 
 ---@param on_press fun(mods: snowcap.input.Modifiers, key: snowcap.Key)
 function LayerHandle:on_key_press(on_press)
-    client():server_streaming_request(
-        input_service.KeyboardKey,
-        { id = self.id },
-        function(response)
-            ---@cast response snowcap.input.v0alpha1.KeyboardKeyResponse
+    client:server_streaming_request(input_service.KeyboardKey, { id = self.id }, function(response)
+        ---@cast response snowcap.input.v0alpha1.KeyboardKeyResponse
 
-            if not response.pressed then
-                return
-            end
-
-            local mods = response.modifiers or {}
-            mods.shift = mods.shift or false
-            mods.ctrl = mods.ctrl or false
-            mods.alt = mods.alt or false
-            mods.super = mods.super or false
-
-            ---@cast mods snowcap.input.Modifiers
-
-            on_press(mods, response.key or 0)
+        if not response.pressed then
+            return
         end
-    )
+
+        local mods = response.modifiers or {}
+        mods.shift = mods.shift or false
+        mods.ctrl = mods.ctrl or false
+        mods.alt = mods.alt or false
+        mods.super = mods.super or false
+
+        ---@cast mods snowcap.input.Modifiers
+
+        on_press(mods, response.key or 0)
+    end)
 end
 
 function LayerHandle:close()
-    client():unary_request(layer_service.Close, { layer_id = self.id })
+    client:unary_request(layer_service.Close, { layer_id = self.id })
 end
 
 layer.anchor = anchor
