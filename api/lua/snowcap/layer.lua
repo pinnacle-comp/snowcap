@@ -2,6 +2,7 @@
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
 -- file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+local log = require("snowcap.log")
 local client = require("snowcap.grpc.client").client
 local layer_service = require("snowcap.grpc.defs").snowcap.layer.v0alpha1.LayerService
 local input_service = require("snowcap.grpc.defs").snowcap.input.v0alpha1.InputService
@@ -83,7 +84,7 @@ end
 ---@field layer snowcap.ZLayer
 
 ---@param args LayerArgs
----@return LayerHandle
+---@return LayerHandle|nil handle A handle to the layer surface, or nil if an error occurred.
 function layer.new_widget(args)
     ---@type snowcap.layer.v0alpha1.NewLayerRequest
     local request = {
@@ -96,34 +97,58 @@ function layer.new_widget(args)
         widget_def = widget.widget_def_into_api(args.widget),
     }
 
-    ---@type snowcap.layer.v0alpha1.NewLayerResponse
-    local response = client:unary_request(layer_service.NewLayer, request)
-    return layer_handle.new(response.layer_id or 0) -- TODO: what to do if nil?
+    local response, err = client:unary_request(layer_service.NewLayer, request)
+
+    if err then
+        log:error(err)
+        return nil
+    end
+
+    ---@cast response snowcap.layer.v0alpha1.NewLayerResponse
+
+    if not response.layer_id then
+        log:error("no layer_id received")
+        return nil
+    end
+
+    return layer_handle.new(response.layer_id)
 end
 
 ---@param on_press fun(mods: snowcap.input.Modifiers, key: snowcap.Key)
 function LayerHandle:on_key_press(on_press)
-    client:server_streaming_request(input_service.KeyboardKey, { id = self.id }, function(response)
-        ---@cast response snowcap.input.v0alpha1.KeyboardKeyResponse
+    local err = client:server_streaming_request(
+        input_service.KeyboardKey,
+        { id = self.id },
+        function(response)
+            ---@cast response snowcap.input.v0alpha1.KeyboardKeyResponse
 
-        if not response.pressed then
-            return
+            if not response.pressed then
+                return
+            end
+
+            local mods = response.modifiers or {}
+            mods.shift = mods.shift or false
+            mods.ctrl = mods.ctrl or false
+            mods.alt = mods.alt or false
+            mods.super = mods.super or false
+
+            ---@cast mods snowcap.input.Modifiers
+
+            on_press(mods, response.key or 0)
         end
+    )
 
-        local mods = response.modifiers or {}
-        mods.shift = mods.shift or false
-        mods.ctrl = mods.ctrl or false
-        mods.alt = mods.alt or false
-        mods.super = mods.super or false
-
-        ---@cast mods snowcap.input.Modifiers
-
-        on_press(mods, response.key or 0)
-    end)
+    if err then
+        log:error(err)
+    end
 end
 
 function LayerHandle:close()
-    client:unary_request(layer_service.Close, { layer_id = self.id })
+    local err = client:unary_request(layer_service.Close, { layer_id = self.id })
+
+    if err then
+        log:error(err)
+    end
 end
 
 layer.anchor = anchor

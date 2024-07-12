@@ -81,142 +81,142 @@ local snowcap_layer_v0alpha1_Layer = {
 
 
 ---@class snowcap.input.v0alpha1.Modifiers
----@field shift boolean??
----@field ctrl boolean??
----@field alt boolean??
----@field super boolean??
+---@field shift boolean?
+---@field ctrl boolean?
+---@field alt boolean?
+---@field super boolean?
 
 ---@class snowcap.input.v0alpha1.KeyboardKeyRequest
----@field id integer??
+---@field id integer?
 
 ---@class snowcap.input.v0alpha1.KeyboardKeyResponse
----@field key integer??
----@field modifiers snowcap.input.v0alpha1.Modifiers??
----@field pressed boolean??
+---@field key integer?
+---@field modifiers snowcap.input.v0alpha1.Modifiers?
+---@field pressed boolean?
 
 ---@class snowcap.input.v0alpha1.PointerButtonRequest
----@field id integer??
+---@field id integer?
 
 ---@class snowcap.input.v0alpha1.PointerButtonResponse
----@field button integer??
----@field pressed boolean??
+---@field button integer?
+---@field pressed boolean?
 
 ---@class google.protobuf.Empty
 
 ---@class snowcap.widget.v0alpha1.Padding
----@field top number??
----@field right number??
----@field bottom number??
----@field left number??
+---@field top number?
+---@field right number?
+---@field bottom number?
+---@field left number?
 
 ---@class snowcap.widget.v0alpha1.Length
----@field fill google.protobuf.Empty??
----@field fill_portion integer??
----@field shrink google.protobuf.Empty??
----@field fixed number??
+---@field fill google.protobuf.Empty?
+---@field fill_portion integer?
+---@field shrink google.protobuf.Empty?
+---@field fixed number?
 
 ---@class snowcap.widget.v0alpha1.Color
----@field red number??
----@field green number??
----@field blue number??
----@field alpha number??
+---@field red number?
+---@field green number?
+---@field blue number?
+---@field alpha number?
 
 ---@class snowcap.widget.v0alpha1.Font
----@field family snowcap.widget.v0alpha1.Font.Family??
----@field weight snowcap.widget.v0alpha1.Font.Weight??
----@field stretch snowcap.widget.v0alpha1.Font.Stretch??
----@field style snowcap.widget.v0alpha1.Font.Style??
+---@field family snowcap.widget.v0alpha1.Font.Family?
+---@field weight snowcap.widget.v0alpha1.Font.Weight?
+---@field stretch snowcap.widget.v0alpha1.Font.Stretch?
+---@field style snowcap.widget.v0alpha1.Font.Style?
 
 ---@class snowcap.widget.v0alpha1.Font.Family
----@field name string??
----@field serif google.protobuf.Empty??
----@field sans_serif google.protobuf.Empty??
----@field cursive google.protobuf.Empty??
----@field fantasy google.protobuf.Empty??
----@field monospace google.protobuf.Empty??
+---@field name string?
+---@field serif google.protobuf.Empty?
+---@field sans_serif google.protobuf.Empty?
+---@field cursive google.protobuf.Empty?
+---@field fantasy google.protobuf.Empty?
+---@field monospace google.protobuf.Empty?
 
 ---@class snowcap.widget.v0alpha1.WidgetDef
----@field text snowcap.widget.v0alpha1.Text??
----@field column snowcap.widget.v0alpha1.Column??
----@field row snowcap.widget.v0alpha1.Row??
----@field scrollable snowcap.widget.v0alpha1.Scrollable??
----@field container snowcap.widget.v0alpha1.Container??
+---@field text snowcap.widget.v0alpha1.Text?
+---@field column snowcap.widget.v0alpha1.Column?
+---@field row snowcap.widget.v0alpha1.Row?
+---@field scrollable snowcap.widget.v0alpha1.Scrollable?
+---@field container snowcap.widget.v0alpha1.Container?
 
 ---@class snowcap.widget.v0alpha1.Text
----@field text string??
----@field pixels number??
----@field width snowcap.widget.v0alpha1.Length??
----@field height snowcap.widget.v0alpha1.Length??
----@field horizontal_alignment snowcap.widget.v0alpha1.Alignment??
----@field vertical_alignment snowcap.widget.v0alpha1.Alignment??
----@field color snowcap.widget.v0alpha1.Color??
----@field font snowcap.widget.v0alpha1.Font??
+---@field text string?
+---@field pixels number?
+---@field width snowcap.widget.v0alpha1.Length?
+---@field height snowcap.widget.v0alpha1.Length?
+---@field horizontal_alignment snowcap.widget.v0alpha1.Alignment?
+---@field vertical_alignment snowcap.widget.v0alpha1.Alignment?
+---@field color snowcap.widget.v0alpha1.Color?
+---@field font snowcap.widget.v0alpha1.Font?
 
 ---@class snowcap.widget.v0alpha1.Column
----@field spacing number??
----@field padding snowcap.widget.v0alpha1.Padding??
----@field item_alignment snowcap.widget.v0alpha1.Alignment??
----@field width snowcap.widget.v0alpha1.Length??
----@field height snowcap.widget.v0alpha1.Length??
----@field max_width number??
----@field clip boolean??
+---@field spacing number?
+---@field padding snowcap.widget.v0alpha1.Padding?
+---@field item_alignment snowcap.widget.v0alpha1.Alignment?
+---@field width snowcap.widget.v0alpha1.Length?
+---@field height snowcap.widget.v0alpha1.Length?
+---@field max_width number?
+---@field clip boolean?
 ---@field children snowcap.widget.v0alpha1.WidgetDef[]?
 
 ---@class snowcap.widget.v0alpha1.Row
----@field spacing number??
----@field padding snowcap.widget.v0alpha1.Padding??
----@field item_alignment snowcap.widget.v0alpha1.Alignment??
----@field width snowcap.widget.v0alpha1.Length??
----@field height snowcap.widget.v0alpha1.Length??
----@field clip boolean??
+---@field spacing number?
+---@field padding snowcap.widget.v0alpha1.Padding?
+---@field item_alignment snowcap.widget.v0alpha1.Alignment?
+---@field width snowcap.widget.v0alpha1.Length?
+---@field height snowcap.widget.v0alpha1.Length?
+---@field clip boolean?
 ---@field children snowcap.widget.v0alpha1.WidgetDef[]?
 
 ---@class snowcap.widget.v0alpha1.ScrollableDirection
----@field vertical snowcap.widget.v0alpha1.ScrollableProperties??
----@field horizontal snowcap.widget.v0alpha1.ScrollableProperties??
+---@field vertical snowcap.widget.v0alpha1.ScrollableProperties?
+---@field horizontal snowcap.widget.v0alpha1.ScrollableProperties?
 
 ---@class snowcap.widget.v0alpha1.ScrollableProperties
----@field width number??
----@field margin number??
----@field scroller_width number??
----@field alignment snowcap.widget.v0alpha1.ScrollableAlignment??
+---@field width number?
+---@field margin number?
+---@field scroller_width number?
+---@field alignment snowcap.widget.v0alpha1.ScrollableAlignment?
 
 ---@class snowcap.widget.v0alpha1.Scrollable
----@field width snowcap.widget.v0alpha1.Length??
----@field height snowcap.widget.v0alpha1.Length??
----@field direction snowcap.widget.v0alpha1.ScrollableDirection??
----@field child snowcap.widget.v0alpha1.WidgetDef??
+---@field width snowcap.widget.v0alpha1.Length?
+---@field height snowcap.widget.v0alpha1.Length?
+---@field direction snowcap.widget.v0alpha1.ScrollableDirection?
+---@field child snowcap.widget.v0alpha1.WidgetDef?
 
 ---@class snowcap.widget.v0alpha1.Container
----@field padding snowcap.widget.v0alpha1.Padding??
----@field width snowcap.widget.v0alpha1.Length??
----@field height snowcap.widget.v0alpha1.Length??
----@field max_width number??
----@field max_height number??
----@field horizontal_alignment snowcap.widget.v0alpha1.Alignment??
----@field vertical_alignment snowcap.widget.v0alpha1.Alignment??
----@field clip boolean??
----@field child snowcap.widget.v0alpha1.WidgetDef??
----@field text_color snowcap.widget.v0alpha1.Color??
----@field background_color snowcap.widget.v0alpha1.Color??
----@field border_radius number??
----@field border_thickness number??
----@field border_color snowcap.widget.v0alpha1.Color??
+---@field padding snowcap.widget.v0alpha1.Padding?
+---@field width snowcap.widget.v0alpha1.Length?
+---@field height snowcap.widget.v0alpha1.Length?
+---@field max_width number?
+---@field max_height number?
+---@field horizontal_alignment snowcap.widget.v0alpha1.Alignment?
+---@field vertical_alignment snowcap.widget.v0alpha1.Alignment?
+---@field clip boolean?
+---@field child snowcap.widget.v0alpha1.WidgetDef?
+---@field text_color snowcap.widget.v0alpha1.Color?
+---@field background_color snowcap.widget.v0alpha1.Color?
+---@field border_radius number?
+---@field border_thickness number?
+---@field border_color snowcap.widget.v0alpha1.Color?
 
 ---@class snowcap.layer.v0alpha1.NewLayerRequest
----@field widget_def snowcap.widget.v0alpha1.WidgetDef??
----@field width integer??
----@field height integer??
----@field anchor snowcap.layer.v0alpha1.Anchor??
----@field keyboard_interactivity snowcap.layer.v0alpha1.KeyboardInteractivity??
----@field exclusive_zone integer??
----@field layer snowcap.layer.v0alpha1.Layer??
+---@field widget_def snowcap.widget.v0alpha1.WidgetDef?
+---@field width integer?
+---@field height integer?
+---@field anchor snowcap.layer.v0alpha1.Anchor?
+---@field keyboard_interactivity snowcap.layer.v0alpha1.KeyboardInteractivity?
+---@field exclusive_zone integer?
+---@field layer snowcap.layer.v0alpha1.Layer?
 
 ---@class snowcap.layer.v0alpha1.NewLayerResponse
----@field layer_id integer??
+---@field layer_id integer?
 
 ---@class snowcap.layer.v0alpha1.CloseRequest
----@field layer_id integer??
+---@field layer_id integer?
 
 ---@class snowcap.v0alpha1.Nothing
 

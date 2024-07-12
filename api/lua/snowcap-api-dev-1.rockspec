@@ -13,6 +13,9 @@ dependencies = {
     "http ~> 0.4",
     "lua-protobuf ~> 0.5",
     "compat53 ~> 0.13",
+    "lualogging ~> 1.8.2",
+
+    -- Run just install
     "lua-grpc-client >= dev-1",
 }
 build = {
@@ -27,5 +30,6 @@ build = {
         ["snowcap.widget"] = "snowcap/widget.lua",
         ["snowcap.layer"] = "snowcap/layer.lua",
         ["snowcap.util"] = "snowcap/util.lua",
+        ["snowcap.log"] = "snowcap/log.lua",
     },
 }
