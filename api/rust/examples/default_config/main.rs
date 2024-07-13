@@ -84,6 +84,7 @@ async fn main() {
             ExclusiveZone::Respect,
             ZLayer::Top,
         )
+        .unwrap()
         .on_key_press(|handle, _key, _mods| {
             dbg!(_key);
             if _key == xkbcommon::xkb::Keysym::Escape {

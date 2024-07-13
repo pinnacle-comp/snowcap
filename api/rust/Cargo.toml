@@ -13,6 +13,8 @@ futures = "0.3.30"
 xdg = { workspace = true }
 xkbcommon = { workspace = true }
 from_variants = "1.0.2"
+tracing = { workspace = true }
+thiserror = "1.0.62"
 
 [lints.rust]
 missing_docs = "warn"

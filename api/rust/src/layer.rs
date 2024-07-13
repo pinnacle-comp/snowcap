@@ -10,6 +10,7 @@ use snowcap_api_defs::snowcap::{
     },
 };
 use tokio_stream::StreamExt;
+use tracing::error;
 use xkbcommon::xkb::Keysym;
 
 use crate::{
@@ -117,6 +118,17 @@ impl From<ZLayer> for layer::v0alpha1::Layer {
     }
 }
 
+/// The error type for [`Layer::new_widget`].
+#[derive(thiserror::Error, Debug)]
+pub enum NewLayerError {
+    /// Snowcap returned a gRPC error status.
+    #[error("gRPC error: `{0}`")]
+    GrpcStatus(#[from] tonic::Status),
+    /// Snowcap did not return a layer id as expected.
+    #[error("snowcap did not return a layer id")]
+    NoLayerId,
+}
+
 impl Layer {
     /// Create a new widget.
     pub fn new_widget(
@@ -128,7 +140,7 @@ impl Layer {
         keyboard_interactivity: KeyboardInteractivity,
         exclusive_zone: ExclusiveZone,
         layer: ZLayer,
-    ) -> LayerHandle {
+    ) -> Result<LayerHandle, NewLayerError> {
         let response = block_on_tokio(crate::layer().new_layer(NewLayerRequest {
             widget_def: Some(widget.into().into()),
             width: Some(width),
@@ -139,15 +151,14 @@ impl Layer {
             ) as i32),
             exclusive_zone: Some(exclusive_zone.into()),
             layer: Some(layer::v0alpha1::Layer::from(layer) as i32),
-        }))
-        .unwrap();
+        }))?;
 
         let id = response
             .into_inner()
             .layer_id
-            .expect("id should not be null");
+            .ok_or(NewLayerError::NoLayerId)?;
 
-        LayerHandle { id: id.into() }
+        Ok(LayerHandle { id: id.into() })
     }
 }
 
@@ -160,10 +171,11 @@ pub struct LayerHandle {
 impl LayerHandle {
     /// Close this layer widget.
     pub fn close(&self) {
-        block_on_tokio(crate::layer().close(CloseRequest {
+        if let Err(status) = block_on_tokio(crate::layer().close(CloseRequest {
             layer_id: Some(self.id.into_inner()),
-        }))
-        .unwrap();
+        })) {
+            error!("Failed to close {self:?}: {status}");
+        }
     }
 
     /// Do something on key press.
@@ -171,11 +183,15 @@ impl LayerHandle {
         &self,
         mut on_press: impl FnMut(LayerHandle, Keysym, Modifiers) + Send + 'static,
     ) {
-        let mut stream = block_on_tokio(crate::input().keyboard_key(KeyboardKeyRequest {
+        let mut stream = match block_on_tokio(crate::input().keyboard_key(KeyboardKeyRequest {
             id: Some(self.id.into_inner()),
-        }))
-        .unwrap()
-        .into_inner();
+        })) {
+            Ok(stream) => stream.into_inner(),
+            Err(status) => {
+                error!("Failed to set `on_key_press` handler: {status}");
+                return;
+            }
+        };
 
         let handle = *self;
 
