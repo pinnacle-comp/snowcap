@@ -144,7 +144,7 @@ function LayerHandle:on_key_press(on_press)
 end
 
 function LayerHandle:close()
-    local err = client:unary_request(layer_service.Close, { layer_id = self.id })
+    local _, err = client:unary_request(layer_service.Close, { layer_id = self.id })
 
     if err then
         log:error(err)
