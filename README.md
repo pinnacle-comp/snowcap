@@ -1,3 +1,7 @@
+> [!IMPORTANT]
+> This repository has been merged into [`pinnacle/snowcap`](https://github.com/pinnacle-comp/pinnacle/tree/main/snowcap) for the foreseeable future (because submodules suck).
+> Check there for updates.
+
 # Snowcap
 A very, *very* Wayland widget system built for Pinnacle
 
